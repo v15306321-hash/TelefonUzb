@@ -38,6 +38,8 @@ type Seed = {
    * `{ file, color }` links a photo (e.g. another angle) to a colour index explicitly.
    */
   photos?: (string | { file: string; color: number })[];
+  /** Seed photos that were replaced by better ones and should be detached. */
+  retiredPhotos?: string[];
   /** Previously seeded colour lists that may be safely upgraded to `colors` (never overwrites admin edits). */
   previousColors?: ColorOption[][];
   /** Products without real photos are created hidden — publish them after uploading photos in the admin. */
@@ -114,10 +116,23 @@ const photoProducts: Seed[] = [
     price: 11_400_000,
     isFeatured: true,
     storage: ["128 GB", "256 GB", "512 GB", "1 TB"],
-    colors: [c("Тёмно-фиолетовый", "To‘q binafsha", "#4f4359"), c("Серебристый", "Kumushrang", "#e3e3e1")],
+    colors: [
+      c("Тёмно-фиолетовый", "To‘q binafsha", "#4f4359"),
+      c("Серебристый", "Kumushrang", "#e3e3e1"),
+      c("Золотой", "Oltinrang", "#e9d9bd"),
+      c("Космический чёрный", "Kosmik qora", "#403e3d"),
+    ],
+    previousColors: [[c("Тёмно-фиолетовый", "To‘q binafsha", "#4f4359"), c("Серебристый", "Kumushrang", "#e3e3e1")]],
     specs: iphoneSpecs('6,1" Super Retina XDR, ProMotion 120 Гц, Always-On', "Apple A16 Bionic", "48 + 12 + 12 Мп, LiDAR", "48 + 12 + 12 MP, LiDAR", 206),
     daysAgo: 7,
-    photos: ["iphone-14-pro-purple-side", "iphone-14-pro-silver-side"],
+    photos: [
+      { file: "iphone-14-pro-purple-side", color: 0 },
+      { file: "iphone-14-pro-purple-camera", color: 0 },
+      { file: "iphone-14-pro-silver-side", color: 1 },
+      { file: "iphone-14-pro-silver-camera", color: 1 },
+      { file: "iphone-14-pro-gold-camera", color: 2 },
+      { file: "iphone-14-pro-black-camera", color: 3 },
+    ],
   },
   {
     slug: "apple-iphone-13",
@@ -162,7 +177,11 @@ const photoProducts: Seed[] = [
     ],
     specs: iphoneSpecs('6,1" Liquid Retina HD', "Apple A13 Bionic", "12 + 12 Мп", "12 + 12 MP", 194),
     daysAgo: 12,
-    photos: ["iphone-11-white", "iphone-11-purple", "iphone-11-green", "iphone-11-black", "iphone-11-red"],
+    photos: [
+      "iphone-11-white", "iphone-11-purple", "iphone-11-green", "iphone-11-black", "iphone-11-red",
+      ...poses(["white", "purple", "green", "black", "red"], "iphone-11", ["side"]),
+      ...poses(["purple", "green", "black", "red"], "iphone-11", ["camera"], 1),
+    ],
   },
 ];
 
@@ -196,10 +215,11 @@ export const products: Seed[] = [
     photos: [
       { file: "iphone-17-pro-blue", color: 0 },
       ...poses(["blue"], "iphone-17-pro", ["side", "camera"], 0),
-      ...poses(["black"], "iphone-17-pro", ["side", "camera"], 1),
-      ...poses(["burgundy"], "iphone-17-pro", ["side", "camera"], 2),
-      { file: "iphone-17-pro-white-camera", color: 3 },
+      ...poses(["black"], "iphone-17-pro", ["front", "side-v2", "camera"], 1),
+      ...poses(["burgundy"], "iphone-17-pro", ["front", "side", "camera"], 2),
+      ...poses(["white"], "iphone-17-pro", ["side", "camera"], 3),
     ],
+    retiredPhotos: ["iphone-17-pro-black-side"],
   },
   {
     slug: "apple-iphone-17-pro",

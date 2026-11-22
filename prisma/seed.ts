@@ -72,6 +72,7 @@ async function main() {
       product = await prisma.product.update({ where: { id: product.id }, data: { colors: p.colors }, include: { images: true } });
       console.log(`  ~ colours updated for ${p.slug}`);
     }
+    await retirePhotos(product.id, p.slug, p.retiredPhotos ?? []);
     await syncPhotos(product.id, p.slug, p.photos ?? [], p.colors.map((c) => c.hex.toLowerCase()));
   }
   console.log(`✓ products: ${created} created, ${products.length - created} already existed`);
@@ -119,7 +120,27 @@ async function syncPhotos(productId: string, slug: string, photos: NonNullable<(
     await prisma.activityLog.create({ data: { action: "seed-photo", entity: "product", entityId: productId, summary: marker } });
     added++;
   }
-  if (added) console.log(`  + ${added} photo(s) for ${slug}`);
+  if (added) {
+    console.log(`  + ${added} photo(s) for ${slug}`);
+    // keep the curated order (front → side → close-up per colour); photos uploaded in the admin stay after them
+    const names = photos.map((e) => `${typeof e === "string" ? e : e.file}.webp`);
+    const all = await prisma.productImage.findMany({ where: { productId }, include: { asset: { select: { filename: true } } }, orderBy: { sortOrder: "asc" } });
+    const rank = (f: string) => (names.includes(f) ? names.indexOf(f) : names.length);
+    const sorted = [...all].sort((a, b) => rank(a.asset.filename) - rank(b.asset.filename) || a.sortOrder - b.sortOrder);
+    await prisma.$transaction(sorted.map((img, i) => prisma.productImage.update({ where: { id: img.id }, data: { sortOrder: i } })));
+  }
+}
+
+/** Detach seed photos that were replaced by better versions. */
+async function retirePhotos(productId: string, slug: string, files: string[]) {
+  for (const file of files) {
+    const img = await prisma.productImage.findFirst({ where: { productId, asset: { filename: `${file}.webp` } } });
+    if (!img) continue;
+    await prisma.productImage.delete({ where: { id: img.id } });
+    const refs = await prisma.productImage.count({ where: { assetId: img.assetId } });
+    if (!refs) await prisma.asset.delete({ where: { id: img.assetId } }).catch(() => undefined);
+    console.log(`  - retired ${file} for ${slug}`);
+  }
 }
 
 main()
