@@ -367,6 +367,16 @@ function cameraLayout(layout: Model3DConfig["layout"], dims: Dims) {
       smalls.push({ x: cx + s * 0.24, y: cy + s * 0.24, r: s * 0.085, kind: "flash" }, { x: cx - s * 0.27, y: cy - s * 0.27, r: s * 0.025, kind: "mic" });
       break;
     }
+    case "dual-vertical": {
+      const s = dims.w * 0.42;
+      const cx = left + 0.04 + s / 2;
+      const cy = top - 0.04 - s / 2;
+      plateau = { x: cx, y: cy, w: s, h: s, r: s * 0.26 };
+      const lr = s * 0.2;
+      lenses.push({ x: cx - s * 0.2, y: cy + s * 0.22, r: lr }, { x: cx - s * 0.2, y: cy - s * 0.22, r: lr });
+      smalls.push({ x: cx + s * 0.22, y: cy - s * 0.04, r: s * 0.075, kind: "flash" }, { x: cx + s * 0.22, y: cy + s * 0.25, r: s * 0.03, kind: "mic" });
+      break;
+    }
     case "vertical-trio": {
       const lr = dims.w * 0.088;
       const x = left + 0.135;
@@ -416,7 +426,7 @@ function cameraLayout(layout: Model3DConfig["layout"], dims: Dims) {
 
 export function ProceduralDevice({ config, color }: { config: Model3DConfig; color: string }) {
   const dims = DEVICE_DIMS[config.kind];
-  const isApple = config.layout === "pro-triangle" || config.layout === "dual-diagonal";
+  const isApple = config.layout === "pro-triangle" || config.layout === "dual-diagonal" || config.layout === "dual-vertical";
 
   const geo = useMemo(() => {
     const { w, h, d, r } = dims;

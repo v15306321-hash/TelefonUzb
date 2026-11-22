@@ -25,8 +25,7 @@ export default function ProductCard({
       className="group relative flex flex-col overflow-hidden rounded-[28px] bg-graphite-900 ring-1 ring-white/[0.06] transition-[box-shadow,background-color] duration-500 hover:bg-graphite-850 hover:ring-white/15"
     >
       {/* product shot on a light studio panel, as on official product photos */}
-      <div className="relative m-1.5 aspect-square overflow-hidden rounded-[22px] bg-[#f5f5f7] sm:m-2">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_40%,#ffffff_0%,#f5f5f7_55%,#ececef_100%)]" />
+      <div className="relative m-1.5 aspect-square overflow-hidden rounded-[22px] bg-white sm:m-2">
         {p.image ? (
           <Image
             src={p.image.url}
@@ -34,7 +33,7 @@ export default function ProductCard({
             fill
             priority={priority}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            className="object-contain p-3 transition-transform duration-700 ease-[cubic-bezier(.16,1,.3,1)] group-hover:scale-[1.04] sm:p-5"
+            className="object-contain p-2 transition-transform duration-700 ease-[cubic-bezier(.16,1,.3,1)] group-hover:scale-[1.04] sm:p-5"
           />
         ) : (
           <div className="absolute inset-0 grid place-items-center text-4xl font-bold text-black/10">{p.brand}</div>

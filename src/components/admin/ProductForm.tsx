@@ -37,7 +37,8 @@ export type ProductFormValue = {
 
 const LAYOUT_LABELS: Record<Model3DConfig["layout"], string> = {
   "pro-triangle": "Три камеры треугольником (iPhone Pro)",
-  "dual-diagonal": "Две камеры по диагонали (iPhone)",
+  "dual-diagonal": "Две камеры по диагонали (iPhone 13/15)",
+  "dual-vertical": "Две камеры вертикально (iPhone 11)",
   "vertical-trio": "Три камеры вертикально (Galaxy S)",
   "horizontal-bar": "Горизонтальная панель (Pixel / iPhone Air)",
   "square-quad": "Квадратный блок 2×2 (Xiaomi / Redmi)",
@@ -408,7 +409,7 @@ export default function ProductForm({
               <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {v.images.map((img, i) => (
                   <li key={img.id} className="group relative overflow-hidden rounded-2xl bg-graphite-850 ring-1 ring-white/[0.08]">
-                    <div className="relative aspect-square bg-[#f5f5f7]">
+                    <div className="relative aspect-square bg-white">
                       <Image src={img.url} alt="" fill sizes="200px" className="object-contain p-2" />
                     </div>
                     {i === 0 && <span className="absolute left-2 top-2"><Badge tone="neutral">Главное</Badge></span>}

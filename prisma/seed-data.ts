@@ -34,6 +34,10 @@ type Seed = {
   specs: SpecItem[];
   model3d: Model3DConfig;
   daysAgo: number;
+  /** Real product photos from prisma/seed-assets/photos (in the same order as colours where possible). */
+  photos?: string[];
+  /** Products without real photos are created hidden — publish them after uploading photos in the admin. */
+  hidden?: boolean;
 };
 
 const s = (labelRu: string, labelUz: string, valueRu: string, valueUz = valueRu): SpecItem => ({ labelRu, labelUz, valueRu, valueUz });
@@ -43,7 +47,104 @@ const ios = (v: string) => s("Операционная система", "Operats
 const android = (v: string) => s("Операционная система", "Operatsion tizim", v);
 const sim = (ru: string, uz: string) => s("SIM-карты", "SIM-kartalar", ru, uz);
 
+const iphoneSpecs = (screen: string, chip: string, camRu: string, camUz: string, weight: number) => [
+  s("Экран", "Ekran", screen),
+  s("Процессор", "Protsessor", chip),
+  s("Основная камера", "Asosiy kamera", camRu, camUz),
+  s("Фронтальная камера", "Old kamera", "12 Мп", "12 MP"),
+  ios("iOS 26"),
+  sim("nano-SIM + eSIM", "nano-SIM + eSIM"),
+  s("Вес", "Og‘irligi", `${weight} г`, `${weight} g`),
+];
+
+/** Models with real product photos (shown first in the catalog). */
+const photoProducts: Seed[] = [
+  {
+    slug: "apple-iphone-15",
+    brand: "apple",
+    category: "smartfony",
+    nameRu: "Apple iPhone 15",
+    descriptionRu: "Dynamic Island, 48-Мп камера, USB-C и корпус из цветного матового стекла с алюминиевой рамкой.",
+    descriptionUz: "Dynamic Island, 48 MP kamera, USB-C va alyuminiy ramkali rangli mat shisha korpus.",
+    price: 10_400_000,
+    isFeatured: true,
+    storage: ["128 GB", "256 GB", "512 GB"],
+    colors: [c("Зелёный", "Yashil", "#dfe8d4"), c("Розовый", "Pushti", "#f2d3da"), c("Чёрный", "Qora", "#3b3c3e"), c("Голубой", "Havorang", "#d4e2ea")],
+    specs: iphoneSpecs('6,1" Super Retina XDR', "Apple A16 Bionic", "48 + 12 Мп", "48 + 12 MP", 171),
+    model3d: { kind: "phone", layout: "dual-diagonal", frame: "aluminium" },
+    daysAgo: 1,
+    photos: ["iphone-15-green", "iphone-15-pink", "iphone-15-black", "iphone-15-blue"],
+  },
+  {
+    slug: "apple-iphone-13-pro",
+    brand: "apple",
+    category: "smartfony",
+    nameRu: "Apple iPhone 13 Pro",
+    descriptionRu: "Дисплей ProMotion 120 Гц, тройная камера с макросъёмкой и режимом «Киноэффект», корпус из нержавеющей стали.",
+    descriptionUz: "ProMotion 120 Hz displey, makro va «Kino effekti» rejimli uchtalik kamera, zanglamas po‘lat korpus.",
+    price: 9_900_000,
+    isFeatured: true,
+    storage: ["128 GB", "256 GB", "512 GB", "1 TB"],
+    colors: [
+      c("Серебристый", "Kumushrang", "#eeeeec"),
+      c("Графитовый", "Grafit", "#54524f"),
+      c("Золотой", "Oltinrang", "#f1e2c6"),
+      c("Альпийский зелёный", "Alp yashil", "#576b55"),
+      c("Небесно-голубой", "Osmon ko‘k", "#a7c1d9"),
+    ],
+    specs: iphoneSpecs('6,1" Super Retina XDR, ProMotion 120 Гц', "Apple A15 Bionic", "12 + 12 + 12 Мп, LiDAR", "12 + 12 + 12 MP, LiDAR", 204),
+    model3d: { kind: "phone", layout: "pro-triangle", frame: "polished" },
+    daysAgo: 6,
+    photos: ["iphone-13-pro-silver", "iphone-13-pro-graphite", "iphone-13-pro-gold", "iphone-13-pro-alpine-green", "iphone-13-pro-sierra-blue"],
+  },
+  {
+    slug: "apple-iphone-13",
+    brand: "apple",
+    category: "smartfony",
+    nameRu: "Apple iPhone 13",
+    descriptionRu: "Яркий OLED-дисплей, чип A15 Bionic, двойная камера с оптической стабилизацией сдвигом матрицы.",
+    descriptionUz: "Yorqin OLED displey, A15 Bionic chipi, matritsa siljishi bilan stabilizatsiyalangan ikkilik kamera.",
+    price: 7_900_000,
+    isFeatured: true,
+    storage: ["128 GB", "256 GB", "512 GB"],
+    colors: [
+      c("Зелёный", "Yashil", "#394c3a"),
+      c("Сияющая звезда", "Yulduzli", "#f4efe8"),
+      c("Синий", "Ko‘k", "#2c5f80"),
+      c("Тёмная ночь", "Qorong‘i tun", "#232a35"),
+      c("(PRODUCT)RED", "(PRODUCT)RED", "#b5121f"),
+    ],
+    specs: iphoneSpecs('6,1" Super Retina XDR', "Apple A15 Bionic", "12 + 12 Мп", "12 + 12 MP", 173),
+    model3d: { kind: "phone", layout: "dual-diagonal", frame: "aluminium" },
+    daysAgo: 8,
+    photos: ["iphone-13-green", "iphone-13-starlight", "iphone-13-blue", "iphone-13-midnight", "iphone-13-red"],
+  },
+  {
+    slug: "apple-iphone-11",
+    brand: "apple",
+    category: "smartfony",
+    nameRu: "Apple iPhone 11",
+    descriptionRu: "Проверенная классика: двойная камера со сверхширокоугольным объективом, ночной режим и чип A13 Bionic.",
+    descriptionUz: "Sinalgan klassika: ultra keng burchakli ikkilik kamera, tungi rejim va A13 Bionic chipi.",
+    price: 5_900_000,
+    isFeatured: true,
+    storage: ["64 GB", "128 GB"],
+    colors: [
+      c("Белый", "Oq", "#f2f0eb"),
+      c("Фиолетовый", "Binafsha", "#d1c9e0"),
+      c("Зелёный", "Yashil", "#c3e3d2"),
+      c("Чёрный", "Qora", "#2a2a2c"),
+      c("(PRODUCT)RED", "(PRODUCT)RED", "#b0182a"),
+    ],
+    specs: iphoneSpecs('6,1" Liquid Retina HD', "Apple A13 Bionic", "12 + 12 Мп", "12 + 12 MP", 194),
+    model3d: { kind: "phone", layout: "dual-vertical", frame: "aluminium" },
+    daysAgo: 12,
+    photos: ["iphone-11-white", "iphone-11-purple", "iphone-11-green", "iphone-11-black", "iphone-11-red"],
+  },
+];
+
 export const products: Seed[] = [
+  ...photoProducts,
   {
     slug: "apple-iphone-17-pro-max",
     brand: "apple",
@@ -69,6 +170,7 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "phone", layout: "pro-triangle", frame: "aluminium" },
     daysAgo: 2,
+    photos: ["iphone-17-pro-blue"],
   },
   {
     slug: "apple-iphone-17-pro",
@@ -93,6 +195,7 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "phone", layout: "pro-triangle", frame: "aluminium" },
     daysAgo: 3,
+    hidden: true,
   },
   {
     slug: "apple-iphone-air",
@@ -116,6 +219,7 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "phone", layout: "horizontal-bar", frame: "polished" },
     daysAgo: 4,
+    hidden: true,
   },
   {
     slug: "apple-iphone-17",
@@ -139,6 +243,7 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "phone", layout: "dual-diagonal", frame: "aluminium" },
     daysAgo: 5,
+    hidden: true,
   },
   {
     slug: "apple-iphone-16",
@@ -161,6 +266,7 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "phone", layout: "dual-diagonal", frame: "aluminium" },
     daysAgo: 60,
+    hidden: true,
   },
   {
     slug: "samsung-galaxy-s25-ultra",
@@ -186,6 +292,7 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "phone", layout: "vertical-trio", frame: "titanium" },
     daysAgo: 30,
+    hidden: true,
   },
   {
     slug: "samsung-galaxy-s25",
@@ -207,6 +314,7 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "phone", layout: "vertical-trio", frame: "aluminium" },
     daysAgo: 28,
+    hidden: true,
   },
   {
     slug: "samsung-galaxy-a56",
@@ -227,6 +335,7 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "phone", layout: "vertical-trio", frame: "aluminium" },
     daysAgo: 45,
+    hidden: true,
   },
   {
     slug: "google-pixel-10-pro",
@@ -248,6 +357,7 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "phone", layout: "horizontal-bar", frame: "polished" },
     daysAgo: 20,
+    hidden: true,
   },
   {
     slug: "google-pixel-10",
@@ -267,6 +377,7 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "phone", layout: "horizontal-bar", frame: "aluminium" },
     daysAgo: 21,
+    hidden: true,
   },
   {
     slug: "xiaomi-15-ultra",
@@ -288,6 +399,7 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "phone", layout: "round-module", frame: "aluminium" },
     daysAgo: 35,
+    hidden: true,
   },
   {
     slug: "xiaomi-15",
@@ -307,6 +419,7 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "phone", layout: "square-quad", frame: "aluminium" },
     daysAgo: 40,
+    hidden: true,
   },
   {
     slug: "redmi-note-14-pro-plus",
@@ -327,6 +440,7 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "phone", layout: "square-quad", frame: "aluminium" },
     daysAgo: 70,
+    hidden: true,
   },
   {
     slug: "oneplus-13",
@@ -347,6 +461,7 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "phone", layout: "round-module", frame: "polished" },
     daysAgo: 50,
+    hidden: true,
   },
   {
     slug: "honor-magic7-pro",
@@ -368,6 +483,7 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "phone", layout: "round-module", frame: "aluminium" },
     daysAgo: 55,
+    hidden: true,
   },
   {
     slug: "apple-ipad-pro-11-m5",
@@ -389,6 +505,7 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "tablet", layout: "single", frame: "aluminium" },
     daysAgo: 10,
+    hidden: true,
   },
   {
     slug: "apple-ipad-air-13-m3",
@@ -408,6 +525,7 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "tablet", layout: "single", frame: "aluminium" },
     daysAgo: 25,
+    hidden: true,
   },
   {
     slug: "samsung-galaxy-tab-s10-fe",
@@ -427,6 +545,7 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "tablet", layout: "single", frame: "aluminium" },
     daysAgo: 65,
+    hidden: true,
   },
   {
     slug: "xiaomi-pad-7",
@@ -446,5 +565,6 @@ export const products: Seed[] = [
     ],
     model3d: { kind: "tablet", layout: "single", frame: "aluminium" },
     daysAgo: 80,
+    hidden: true,
   },
 ];

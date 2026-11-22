@@ -12,7 +12,7 @@ import { brands, categories, products } from "./seed-data";
 import { defaultSiteContent } from "../src/lib/types";
 
 const prisma = new PrismaClient();
-const ASSET_DIR = path.join(__dirname, "seed-assets");
+const PHOTO_DIR = path.join(__dirname, "seed-assets", "photos");
 
 async function main() {
   // --- admin ---
@@ -48,6 +48,7 @@ async function main() {
           price: p.price,
           specialPrice: p.specialPrice ?? null,
           inStock: p.inStock ?? true,
+          isHidden: p.hidden ?? false,
           isFeatured: p.isFeatured ?? false,
           sortOrder: i * 10,
           storageOptions: p.storage,
@@ -62,9 +63,9 @@ async function main() {
       });
       created++;
     }
-    // attach pre-rendered studio images if available and product has none
-    if (product.images.length === 0) {
-      const files = ["1", "2"].map((n) => path.join(ASSET_DIR, `${p.slug}-${n}.webp`)).filter((f) => existsSync(f));
+    // attach real product photos if the product has none yet
+    if (product.images.length === 0 && p.photos?.length) {
+      const files = p.photos.map((n) => path.join(PHOTO_DIR, `${n}.webp`)).filter((f) => existsSync(f));
       for (const [idx, file] of files.entries()) {
         const buf = readFileSync(file);
         const meta = await sharp(buf).metadata();
@@ -73,7 +74,7 @@ async function main() {
         });
         await prisma.productImage.create({ data: { productId: product.id, assetId: asset.id, sortOrder: idx } });
       }
-      if (files.length) console.log(`  + ${files.length} image(s) for ${p.slug}`);
+      if (files.length) console.log(`  + ${files.length} photo(s) for ${p.slug}`);
     }
   }
   console.log(`✓ products: ${created} created, ${products.length - created} already existed`);

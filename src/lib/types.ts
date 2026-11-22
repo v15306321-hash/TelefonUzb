@@ -24,6 +24,7 @@ export const deviceKinds = ["phone", "tablet"] as const;
 export const cameraLayouts = [
   "pro-triangle",
   "dual-diagonal",
+  "dual-vertical",
   "vertical-trio",
   "horizontal-bar",
   "square-quad",

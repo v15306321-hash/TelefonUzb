@@ -194,7 +194,7 @@ export default function SearchBox({
                     onMouseEnter={() => setActive(i)}
                     className={`flex items-center gap-4 px-4 py-2.5 transition-colors ${i === active ? "bg-white/[0.07]" : ""}`}
                   >
-                    <span className="relative grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#f5f5f7]">
+                    <span className="relative grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-white">
                       {it.image && <Image src={it.image.url} alt="" width={96} height={96} className="h-full w-full object-contain p-1" />}
                     </span>
                     <span className="min-w-0 flex-1">
