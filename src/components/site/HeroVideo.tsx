@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 
+/** Must mirror the `wide` variant in globals.css (its negation). */
+const COMPACT_QUERY = "(max-width: 767px), (orientation: portrait) and (max-width: 1024px)";
+
 type Props = {
   src: string;
   mobileSrc: string;
@@ -11,7 +14,7 @@ type Props = {
 };
 
 /**
- * Full-bleed background video.
+ * Hero background video: full-bleed on wide screens, a 4:3 frame on phones.
  *  - poster image renders immediately (LCP), the video is attached after hydration
  *    so it never blocks the first paint;
  *  - a lighter file is used on small / portrait screens;
@@ -25,7 +28,7 @@ export default function HeroVideo({ src, mobileSrc, poster, mobilePoster, label 
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px), (orientation: portrait) and (max-width: 1024px)");
+    const mq = window.matchMedia(COMPACT_QUERY);
     const nav = navigator as Navigator & { connection?: { saveData?: boolean } };
     if (nav.connection?.saveData) return; // respect data saver: keep poster
     setSource(mq.matches ? mobileSrc : src);
@@ -49,13 +52,13 @@ export default function HeroVideo({ src, mobileSrc, poster, mobilePoster, label 
     <div className="absolute inset-0 overflow-hidden bg-black" aria-hidden>
       {(poster || mobilePoster) && (
         <picture>
-          {mobilePoster && <source media="(max-width: 767px)" srcSet={mobilePoster} />}
+          {mobilePoster && <source media={COMPACT_QUERY} srcSet={mobilePoster} />}
           <img
             src={poster || mobilePoster}
             alt=""
             fetchPriority="high"
             decoding="async"
-            className={`absolute inset-0 h-full w-full object-cover object-[58%_50%] transition-opacity duration-1000 ${playing && !failed ? "opacity-0" : "opacity-100"}`}
+            className={`absolute inset-0 h-full w-full object-cover object-center wide:object-[58%_50%] transition-opacity duration-1000 ${playing && !failed ? "opacity-0" : "opacity-100"}`}
           />
         </picture>
       )}
@@ -63,7 +66,7 @@ export default function HeroVideo({ src, mobileSrc, poster, mobilePoster, label 
         <video
           ref={ref}
           key={source}
-          className={`absolute inset-0 h-full w-full object-cover object-[58%_50%] transition-opacity duration-1000 ${playing ? "opacity-100" : "opacity-0"}`}
+          className={`absolute inset-0 h-full w-full object-cover object-center wide:object-[58%_50%] transition-opacity duration-1000 ${playing ? "opacity-100" : "opacity-0"}`}
           src={source}
           autoPlay
           muted

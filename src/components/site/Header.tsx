@@ -13,14 +13,25 @@ type Labels = { home: string; catalog: string; contacts: string; menu: string; c
 export default function Header({ locale, logo, mainPhone, labels }: { locale: Locale; logo: string; mainPhone: string; labels: Labels }) {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
+  // the hairline under the header is shown only while the page is moving
+  const [moving, setMoving] = useState(false);
   const [open, setOpen] = useState(false);
   const isHome = pathname === `/${locale}`;
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
-    onScroll();
+    let idle: number | undefined;
+    const onScroll = () => {
+      setScrolled(window.scrollY > 24);
+      setMoving(true);
+      window.clearTimeout(idle);
+      idle = window.setTimeout(() => setMoving(false), 650);
+    };
+    setScrolled(window.scrollY > 24);
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      window.clearTimeout(idle);
+      window.removeEventListener("scroll", onScroll);
+    };
   }, []);
 
   useEffect(() => setOpen(false), [pathname]);
@@ -43,9 +54,9 @@ export default function Header({ locale, logo, mainPhone, labels }: { locale: Lo
 
   return (
     <header
-      className={`fixed inset-x-0 top-0 z-50 transition-[background-color,border-color,backdrop-filter] duration-500 ${
-        solid ? "border-b border-white/[0.07] bg-black/70 backdrop-blur-xl backdrop-saturate-150" : "border-b border-transparent bg-gradient-to-b from-black/50 to-transparent"
-      }`}
+      className={`fixed inset-x-0 top-0 z-50 border-b transition-[background-color,border-color,backdrop-filter] duration-500 ${
+        solid ? "bg-black/70 backdrop-blur-xl backdrop-saturate-150" : "bg-gradient-to-b from-black/50 to-transparent"
+      } ${solid && (moving || open) ? "border-white/[0.08]" : "border-transparent"}`}
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
       <div className="container-x flex h-16 items-center justify-between gap-4 md:h-[72px]">

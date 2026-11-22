@@ -8,7 +8,7 @@ import { effectivePrice, getProductBySlug, getVisibleProducts, toCard } from "@/
 import { formatPrice, pick, telHref } from "@/lib/localize";
 import { getSiteContent } from "@/lib/settings";
 import { languageAlternates } from "@/lib/seo";
-import { SITE_URL } from "@/lib/site";
+import { OG_IMAGE, SITE_URL } from "@/lib/site";
 import ProductShowcase from "@/components/site/ProductShowcase";
 import ProductCard from "@/components/site/ProductCard";
 import { PhoneIcon } from "@/components/site/Header";
@@ -32,7 +32,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: name,
     description,
     alternates: languageAlternates(locale, `/product/${p.slug}`),
-    openGraph: { title: name, description, images: p.images[0] ? [{ url: p.images[0].url }] : undefined },
+    openGraph: { title: name, description, type: "website", images: p.images[0] ? [{ url: p.images[0].url, alt: name }, OG_IMAGE] : [OG_IMAGE] },
   };
 }
 

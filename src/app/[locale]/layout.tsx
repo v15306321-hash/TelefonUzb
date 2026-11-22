@@ -4,7 +4,7 @@ import "../globals.css";
 import { isLocale, localeMeta, type Locale } from "@/i18n/config";
 import { getDictionary } from "@/i18n";
 import { getSiteContent, resolveMedia } from "@/lib/settings";
-import { SITE_URL } from "@/lib/site";
+import { OG_IMAGE, SITE_URL } from "@/lib/site";
 import Header from "@/components/site/Header";
 import Footer from "@/components/site/Footer";
 import LocaleSync from "@/components/site/LocaleSync";
@@ -32,9 +32,9 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
       siteName: dict.meta.siteName,
       locale: localeMeta[locale].ogLocale,
       type: "website",
-      images: [{ url: "/media/hero-poster.webp", width: 1280, height: 720 }],
+      images: [OG_IMAGE],
     },
-    twitter: { card: "summary_large_image" },
+    twitter: { card: "summary_large_image", images: [OG_IMAGE.url] },
   };
 }
 

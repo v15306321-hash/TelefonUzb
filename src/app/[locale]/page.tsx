@@ -50,22 +50,28 @@ export default async function HomePage({ params }: Params) {
   return (
     <div className="page-enter">
       {/* ---------------- HERO ---------------- */}
-      <section className="relative isolate flex h-[100svh] min-h-[600px] w-full flex-col overflow-hidden" aria-label={dict.hero.videoLabel}>
-        <HeroVideo
-          src={media.heroVideo}
-          mobileSrc={media.heroVideoMobile}
-          poster={media.heroPoster}
-          mobilePoster={media.heroPosterMobile}
-          label={dict.hero.videoLabel}
-        />
+      <section className="relative isolate flex w-full flex-col overflow-hidden wide:h-[100svh] wide:min-h-[600px]" aria-label={dict.hero.videoLabel}>
+        {/* phones / portrait tablets: the whole storefront in a 4:3 frame under the header;
+            wide screens: full-bleed background */}
+        <div className="relative mt-[calc(4rem+env(safe-area-inset-top))] aspect-[4/3] w-full md:mt-[calc(4.5rem+env(safe-area-inset-top))] wide:absolute wide:inset-0 wide:mt-0! wide:aspect-auto">
+          <HeroVideo
+            src={media.heroVideo}
+            mobileSrc={media.heroVideoMobile}
+            poster={media.heroPoster}
+            mobilePoster={media.heroPosterMobile}
+            label={dict.hero.videoLabel}
+          />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-[14%] bg-gradient-to-b from-black to-transparent wide:hidden" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[38%] wide:hidden" style={{ background: HERO_FADE }} />
+        </div>
         {/* top shade for header legibility */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/55 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 hidden h-40 bg-gradient-to-b from-black/55 to-transparent wide:block" />
         {/* bottom dissolve into the page background */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[72%] sm:h-[62%]" style={{ background: HERO_FADE }} />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 hidden h-[62%] wide:block" style={{ background: HERO_FADE }} />
         {/* soft scrim behind the headline for legibility over the bright shop window */}
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_45%_at_50%_68%,rgba(0,0,0,0.55),transparent_70%)] sm:bg-[radial-gradient(ellipse_55%_40%_at_50%_66%,rgba(0,0,0,0.5),transparent_72%)]" />
+        <div className="pointer-events-none absolute inset-0 hidden bg-[radial-gradient(ellipse_55%_40%_at_50%_66%,rgba(0,0,0,0.5),transparent_72%)] wide:block" />
 
-        <div className="container-x relative z-10 mt-auto flex flex-col items-center pb-[max(4.5rem,11svh)] text-center">
+        <div className="container-x relative z-10 -mt-4 flex flex-col items-center pb-14 text-center wide:mt-auto wide:pb-[max(4.5rem,11svh)]">
           <p className="eyebrow mb-4 !text-white/70 animate-fade-up">{dict.hero.eyebrow}</p>
           <h1 className="headline max-w-4xl text-balance text-[2.2rem] text-white [text-shadow:0_2px_30px_rgba(0,0,0,0.45)] animate-fade-up [animation-delay:80ms] sm:text-6xl lg:text-7xl">
             {pick(locale, content.heroTitleRu, content.heroTitleUz)}
@@ -81,7 +87,7 @@ export default async function HomePage({ params }: Params) {
 
         <a
           href="#featured"
-          className="absolute bottom-5 left-1/2 z-10 hidden -translate-x-1/2 flex-col items-center gap-2 text-[0.68rem] uppercase tracking-[0.2em] text-white/35 transition-colors hover:text-white/70 sm:flex"
+          className="absolute bottom-5 left-1/2 z-10 hidden -translate-x-1/2 flex-col items-center gap-2 text-[0.68rem] uppercase tracking-[0.2em] text-white/35 transition-colors hover:text-white/70 wide:flex"
         >
           {dict.hero.scroll}
           <span className="block h-7 w-px animate-pulse bg-gradient-to-b from-white/50 to-transparent" />
