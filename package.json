@@ -1,0 +1,53 @@
+{
+  "name": "telefonuzb",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TELEFON.UZB premium — сайт магазина смартфонов с каталогом, 3D-просмотром и админ-панелью",
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:backup": "bash scripts/backup-db.sh",
+    "admin:create": "tsx scripts/create-admin.ts",
+    "render:images": "node scripts/render-product-images.mjs",
+    "postinstall": "prisma generate"
+  },
+  "engines": {
+    "node": ">=20.9"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@prisma/client": "^6.19.3",
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.2",
+    "aws4fetch": "^1.0.20",
+    "bcryptjs": "^3.0.3",
+    "jose": "^6.2.18",
+    "next": "^15.5.29",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "server-only": "^0.0.1",
+    "sharp": "^0.35.5",
+    "three": "^0.180.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
+    "@tailwindcss/postcss": "^4.3.5",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.180.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.29",
+    "prisma": "^6.19.3",
+    "tailwindcss": "^4.3.5",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  }
+}

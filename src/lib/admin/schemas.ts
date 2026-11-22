@@ -1,0 +1,72 @@
+import { z } from "zod";
+import { colorOptionSchema, model3dSchema, specItemSchema } from "../types";
+
+export const slugSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(2, "Минимум 2 символа")
+  .max(80)
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, "Только латиница, цифры и дефис");
+
+const idSchema = z.string().regex(/^[a-z0-9]{10,40}$/i, "Некорректный идентификатор");
+
+export const productInputSchema = z
+  .object({
+    id: idSchema.optional(),
+    slug: slugSchema,
+    nameRu: z.string().trim().min(2, "Укажите название").max(120),
+    nameUz: z.string().trim().max(120).default(""),
+    descriptionRu: z.string().trim().max(5000).default(""),
+    descriptionUz: z.string().trim().max(5000).default(""),
+    brandId: idSchema,
+    categoryId: idSchema,
+    price: z.coerce.number().int("Цена — целое число").min(0).max(2_000_000_000),
+    specialPrice: z.coerce.number().int().min(0).max(2_000_000_000).nullable().default(null),
+    inStock: z.boolean(),
+    isHidden: z.boolean(),
+    isFeatured: z.boolean(),
+    sortOrder: z.coerce.number().int().min(-10000).max(10000).default(0),
+    storageOptions: z.array(z.string().trim().min(1).max(30)).max(12).default([]),
+    colors: z.array(colorOptionSchema).max(16).default([]),
+    specs: z.array(specItemSchema).max(60).default([]),
+    model3d: model3dSchema,
+    modelAssetId: idSchema.nullable().default(null),
+    imageAssetIds: z.array(idSchema).max(20).default([]),
+  })
+  .refine((v) => v.specialPrice === null || v.specialPrice === 0 || v.specialPrice < v.price, {
+    message: "Специальная цена должна быть ниже обычной",
+    path: ["specialPrice"],
+  });
+export type ProductInput = z.infer<typeof productInputSchema>;
+
+export const categoryInputSchema = z.object({
+  id: idSchema.optional(),
+  slug: slugSchema,
+  nameRu: z.string().trim().min(1, "Укажите название").max(60),
+  nameUz: z.string().trim().max(60).default(""),
+  sortOrder: z.coerce.number().int().min(-10000).max(10000).default(0),
+  isVisible: z.boolean().default(true),
+});
+
+export const brandInputSchema = z.object({
+  id: idSchema.optional(),
+  slug: slugSchema,
+  name: z.string().trim().min(1, "Укажите название").max(60),
+  sortOrder: z.coerce.number().int().min(-10000).max(10000).default(0),
+  isVisible: z.boolean().default(true),
+});
+
+export type ActionResult<T = undefined> =
+  | { ok: true; data?: T; message?: string }
+  | { ok: false; error: string; fieldErrors?: Record<string, string> };
+
+export function zodErrors(err: z.ZodError): { error: string; fieldErrors: Record<string, string> } {
+  const fieldErrors: Record<string, string> = {};
+  for (const issue of err.issues) {
+    const key = issue.path.join(".") || "_";
+    if (!fieldErrors[key]) fieldErrors[key] = issue.message;
+  }
+  const first = err.issues[0];
+  return { error: first ? `${first.path.join(".") || "Форма"}: ${first.message}` : "Ошибка валидации", fieldErrors };
+}

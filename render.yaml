@@ -1,0 +1,34 @@
+# Render Blueprint: web service + managed PostgreSQL.
+# Deploy: Render Dashboard → New → Blueprint → select this repository.
+# After the first deploy set ADMIN_PASSWORD (and change it later in the admin panel).
+databases:
+  - name: telefonuzb-db
+    databaseName: telefonuzb
+    user: telefonuzb
+    plan: basic-256mb
+
+services:
+  - type: web
+    name: telefonuzb
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npx prisma migrate deploy && npm run db:seed && npm start
+    healthCheckPath: /ru
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: telefonuzb-db
+          property: connectionString
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: NEXT_PUBLIC_SITE_URL
+        sync: false
+      - key: STORAGE_DRIVER
+        value: db
