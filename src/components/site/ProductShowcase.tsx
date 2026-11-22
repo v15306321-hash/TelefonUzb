@@ -53,7 +53,7 @@ export default function ProductShowcase({
       <div className="lg:sticky lg:top-24 lg:self-start">
         <div className="relative h-[58svh] min-h-[380px] overflow-hidden rounded-[32px] bg-gradient-to-b from-graphite-900 to-black ring-1 ring-white/[0.06] sm:h-[66svh] lg:h-[calc(100svh-9.5rem)] lg:max-h-[860px]">
           {photo ? (
-            <div className="absolute inset-0 animate-fade-in p-6 sm:p-10">
+            <div className="absolute inset-0 animate-fade-in bg-[#f5f5f7] p-6 sm:p-10">
               <Image src={photo.url} alt={name} fill sizes="(max-width: 1024px) 100vw, 55vw" className="object-contain p-6 sm:p-10" />
             </div>
           ) : (
@@ -89,7 +89,7 @@ export default function ProductShowcase({
                 role="tab"
                 aria-selected={view === i}
                 onClick={() => setView(i)}
-                className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-graphite-900 ring-1 transition ${view === i ? "ring-white" : "ring-white/10 hover:ring-white/30"}`}
+                className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-[#f5f5f7] ring-1 transition ${view === i ? "ring-white" : "ring-white/10 hover:ring-white/30"}`}
                 aria-label={`${labels.photos} ${i + 1}`}
               >
                 <Image src={img.url} alt="" fill sizes="64px" className="object-contain p-1.5" />

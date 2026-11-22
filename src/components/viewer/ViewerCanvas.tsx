@@ -1,7 +1,8 @@
 "use client";
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { ContactShadows, Environment, Lightformer, useGLTF } from "@react-three/drei";
+import { ContactShadows, useGLTF } from "@react-three/drei";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import type { Model3DConfig } from "@/lib/types";
@@ -23,19 +24,35 @@ export type ViewerCanvasProps = {
 
 const DRACO_PATH = "/draco/";
 
+/** Studio pair composition (as on product photos): back view on the left, front view overlapping on the right. */
+function pairLayout(kind: Model3DConfig["kind"]) {
+  const d = DEVICE_DIMS[kind];
+  const offset = d.w * 0.32;
+  const span = Math.max(d.h, 2 * offset + d.w);
+  const fov = 14;
+  const distance = span / 0.84 / 2 / Math.tan(THREE.MathUtils.degToRad(fov / 2));
+  return { offset, fov, distance };
+}
+
 export default function ViewerCanvas(props: ViewerCanvasProps) {
   const { active, studio } = props;
   const height = DEVICE_DIMS[props.config.kind].h;
-  const pairScale = DEVICE_DIMS[props.config.kind].w / DEVICE_DIMS.phone.w;
+  const pair = pairLayout(props.config.kind);
+  const camera =
+    studio === "pair"
+      ? { position: [0, 0, pair.distance] as [number, number, number], fov: pair.fov }
+      : { position: [0, 0, studio ? 3.9 : 4.15] as [number, number, number], fov: 30 };
   return (
     <Canvas
       frameloop={active || studio ? "always" : "never"}
-      dpr={studio ? 2 : [1, 1.75]}
-      camera={{ position: [0, 0, studio === "pair" ? (props.config.kind === "tablet" ? 7.8 : 5.1) : studio ? 4.3 : 4.15], fov: 30, near: 0.1, far: 50 }}
+      dpr={studio ? 2 : [1, 2]}
+      shadows={!studio}
+      camera={{ ...camera, near: 0.1, far: 60 }}
       gl={{ antialias: true, alpha: true, preserveDrawingBuffer: !!studio, powerPreference: "high-performance" }}
       onCreated={({ gl }) => {
-        gl.toneMapping = THREE.ACESFilmicToneMapping;
-        gl.toneMappingExposure = 1.05;
+        // Khronos PBR Neutral: keeps product colours true to the swatches
+        gl.toneMapping = THREE.NeutralToneMapping;
+        gl.toneMappingExposure = 1;
         gl.setClearColor(0x000000, 0);
         gl.domElement.addEventListener("webglcontextlost", (e) => {
           e.preventDefault();
@@ -49,10 +66,10 @@ export default function ViewerCanvas(props: ViewerCanvasProps) {
       <Suspense key={props.modelUrl ?? "procedural"} fallback={null}>
         {studio === "pair" ? (
           <>
-            <group position={[-0.54 * pairScale, 0.02, -0.25]} rotation={[0.02, Math.PI + 0.42, 0]}>
+            <group position={[-pair.offset, 0, -0.08]} rotation={[0, Math.PI, 0]}>
               <Model {...props} />
             </group>
-            <group position={[0.58 * pairScale, -0.04, 0.2]} rotation={[0.02, -0.3, 0]}>
+            <group position={[pair.offset, 0, 0.08]}>
               <Model {...props} />
             </group>
             <ReadySignal onReady={props.onReady} />
@@ -65,29 +82,40 @@ export default function ViewerCanvas(props: ViewerCanvasProps) {
         )}
       </Suspense>
       {!studio && (
-        <ContactShadows position={[0, -height / 2 - 0.16, 0]} opacity={0.55} scale={4} blur={2.6} far={1.2} resolution={256} color="#000000" />
+        <ContactShadows position={[0, -height / 2 - 0.16, 0]} opacity={0.6} scale={4} blur={2.4} far={1.4} resolution={512} color="#000000" />
       )}
     </Canvas>
   );
 }
 
+/** Photographic studio lighting: PMREM-filtered room environment + soft key / rim lights. */
 function StudioLights() {
+  const { gl, scene } = useThree();
+  useLayoutEffect(() => {
+    const pmrem = new THREE.PMREMGenerator(gl);
+    const room = new RoomEnvironment();
+    const rt = pmrem.fromScene(room, 0.035);
+    scene.environment = rt.texture;
+    scene.environmentIntensity = 0.85;
+    return () => {
+      scene.environment = null;
+      rt.dispose();
+      pmrem.dispose();
+      room.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.isMesh) {
+          m.geometry.dispose();
+          (Array.isArray(m.material) ? m.material : [m.material]).forEach((mt) => mt.dispose());
+        }
+      });
+    };
+  }, [gl, scene]);
   return (
     <>
-      <ambientLight intensity={0.25} />
-      <directionalLight position={[3, 4, 5]} intensity={1.4} castShadow={false} />
-      <directionalLight position={[-4, 2, -3]} intensity={0.9} color="#dfe6ff" />
-      <Environment resolution={256} frames={1}>
-        <color attach="background" args={["#0a0a0c"]} />
-        <Lightformer form="rect" intensity={3} position={[0, 4, 3]} scale={[8, 2, 1]} rotation={[Math.PI / 3, 0, 0]} />
-        <Lightformer form="rect" intensity={2.2} position={[-5, 1, 1]} scale={[2, 6, 1]} rotation={[0, Math.PI / 2, 0]} />
-        <Lightformer form="rect" intensity={2.2} position={[5, 1, -1]} scale={[2, 6, 1]} rotation={[0, -Math.PI / 2, 0]} />
-        <Lightformer form="rect" intensity={1.2} position={[0, -3, 4]} scale={[6, 1, 1]} rotation={[-Math.PI / 3, 0, 0]} />
-        <Lightformer form="ring" intensity={1.6} color="#ff3b30" position={[3, 3, -5]} scale={1.5} />
-        <Lightformer form="rect" intensity={1.5} position={[0, 0, -6]} scale={[10, 4, 1]} />
-        <Lightformer form="rect" intensity={0.7} position={[-3, 1.5, 6]} scale={[3, 8, 1]} rotation={[0, Math.PI, 0]} />
-        <Lightformer form="rect" intensity={0.3} position={[3, -1, 6]} scale={[6, 3, 1]} rotation={[0, Math.PI, 0]} />
-      </Environment>
+      <ambientLight intensity={0.12} />
+      <directionalLight position={[-2.5, 3.5, 4]} intensity={1.1} />
+      <directionalLight position={[3, 1.5, -4]} intensity={0.8} color="#e9eeff" />
+      <directionalLight position={[2.5, -2, 3]} intensity={0.25} />
     </>
   );
 }
@@ -108,7 +136,7 @@ function Rig({
     const g = group.current;
     if (!g) return;
     if (studio === "back") {
-      g.rotation.set(0.08, Math.PI + 0.55, 0);
+      g.rotation.set(0.06, Math.PI + 0.5, 0);
       return;
     }
     if (studio === "front") {

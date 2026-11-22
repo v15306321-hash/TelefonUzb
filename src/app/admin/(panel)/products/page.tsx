@@ -121,7 +121,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
                   <tr key={p.id} className={`transition-colors hover:bg-white/[0.02] ${p.isHidden ? "opacity-60" : ""}`}>
                     <td className="px-5 py-3">
                       <Link href={`/admin/products/${p.id}`} className="flex items-center gap-3">
-                        <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-black/50">
+                        <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-[#f5f5f7]">
                           {img && <Image src={img} alt="" fill sizes="48px" className="object-contain p-1" />}
                         </span>
                         <span className="min-w-0">

@@ -16,7 +16,7 @@ export default function RenderFromModel({
   color,
   modelUrl,
   mode = "pair",
-  size = 1200,
+  size = 1600,
   onDone,
   onError,
 }: {
@@ -33,7 +33,7 @@ export default function RenderFromModel({
   const done = useRef(false);
 
   useEffect(() => {
-    const t = setTimeout(() => !done.current && onError(new Error("Не удалось отрисовать модель")), 20000);
+    const t = setTimeout(() => !done.current && onError(new Error("Не удалось отрисовать модель")), 150000);
     return () => clearTimeout(t);
   }, [onError]);
 
@@ -52,7 +52,7 @@ export default function RenderFromModel({
   };
 
   return (
-    <div ref={wrap} aria-hidden style={{ position: "fixed", left: -10000, top: 0, width: size / 2, height: (size / 2) * 1.25, pointerEvents: "none" }}>
+    <div ref={wrap} aria-hidden style={{ position: "fixed", left: -10000, top: 0, width: size / 2, height: size / 2, pointerEvents: "none" }}>
       <ViewerCanvas config={config} color={color} modelUrl={modelUrl} stateRef={stateRef} active studio={mode} onReady={capture} onError={() => onError(new Error("WebGL недоступен"))} />
     </div>
   );

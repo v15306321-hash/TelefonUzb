@@ -6,12 +6,14 @@ databases:
     databaseName: telefonuzb
     user: telefonuzb
     plan: basic-256mb
+    region: frankfurt
 
 services:
   - type: web
     name: telefonuzb
     runtime: node
     plan: starter
+    region: frankfurt
     buildCommand: npm ci && npm run build
     startCommand: npx prisma migrate deploy && npm run db:seed && npm start
     healthCheckPath: /ru

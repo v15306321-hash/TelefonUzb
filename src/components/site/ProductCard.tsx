@@ -24,8 +24,9 @@ export default function ProductCard({
       style={{ ["--reveal-delay" as string]: `${revealDelay}ms` }}
       className="group relative flex flex-col overflow-hidden rounded-[28px] bg-graphite-900 ring-1 ring-white/[0.06] transition-[box-shadow,background-color] duration-500 hover:bg-graphite-850 hover:ring-white/15"
     >
-      <div className="relative aspect-[4/5] overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_45%,rgba(255,255,255,0.08),transparent_65%)]" />
+      {/* product shot on a light studio panel, as on official product photos */}
+      <div className="relative m-1.5 aspect-square overflow-hidden rounded-[22px] bg-[#f5f5f7] sm:m-2">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_40%,#ffffff_0%,#f5f5f7_55%,#ececef_100%)]" />
         {p.image ? (
           <Image
             src={p.image.url}
@@ -33,18 +34,18 @@ export default function ProductCard({
             fill
             priority={priority}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            className="object-contain p-5 transition-transform duration-700 ease-[cubic-bezier(.16,1,.3,1)] group-hover:scale-[1.05] sm:p-7"
+            className="object-contain p-3 transition-transform duration-700 ease-[cubic-bezier(.16,1,.3,1)] group-hover:scale-[1.04] sm:p-5"
           />
         ) : (
-          <div className="absolute inset-0 grid place-items-center text-4xl font-bold text-white/10">{p.brand}</div>
+          <div className="absolute inset-0 grid place-items-center text-4xl font-bold text-black/10">{p.brand}</div>
         )}
         {p.specialPrice && (
-          <span className="absolute left-4 top-4 rounded-full bg-signal px-2.5 py-1 text-[0.7rem] font-semibold text-white">
+          <span className="absolute left-3 top-3 rounded-full bg-signal px-2.5 py-1 text-[0.7rem] font-semibold text-white sm:left-4 sm:top-4">
             −{Math.round((1 - p.specialPrice / p.price) * 100)}%
           </span>
         )}
       </div>
-      <div className="flex flex-1 flex-col gap-1.5 px-4 pb-5 pt-1 sm:px-6 sm:pb-6">
+      <div className="flex flex-1 flex-col gap-1.5 px-4 pb-5 pt-3 sm:px-6 sm:pb-6 sm:pt-4">
         <span className="text-[0.7rem] font-medium uppercase tracking-[0.14em] text-white/40">{p.brand}</span>
         <h3 className="line-clamp-2 text-[0.98rem] font-semibold leading-snug tracking-[-0.01em] text-white sm:text-[1.05rem]">{p.name}</h3>
         <div className="mt-auto flex flex-wrap items-end justify-between gap-x-3 gap-y-1.5 pt-3">

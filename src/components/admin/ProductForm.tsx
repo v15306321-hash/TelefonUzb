@@ -407,8 +407,8 @@ export default function ProductForm({
             {v.images.length ? (
               <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {v.images.map((img, i) => (
-                  <li key={img.id} className="group relative overflow-hidden rounded-2xl bg-black/50 ring-1 ring-white/[0.08]">
-                    <div className="relative aspect-[4/5]">
+                  <li key={img.id} className="group relative overflow-hidden rounded-2xl bg-graphite-850 ring-1 ring-white/[0.08]">
+                    <div className="relative aspect-square bg-[#f5f5f7]">
                       <Image src={img.url} alt="" fill sizes="200px" className="object-contain p-2" />
                     </div>
                     {i === 0 && <span className="absolute left-2 top-2"><Badge tone="neutral">Главное</Badge></span>}
