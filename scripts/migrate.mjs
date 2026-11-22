@@ -9,14 +9,20 @@ import path from "node:path";
 import pg from "pg";
 
 const dir = path.join(process.cwd(), "prisma", "migrations");
-const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+const FATAL = { "28P01": "wrong password for the database user", "28000": "authentication rejected", "3D000": "database does not exist" };
 
 async function connectWithRetry(attempts = 6) {
   for (let i = 1; i <= attempts; i++) {
+    const c = new pg.Client({ connectionString: process.env.DATABASE_URL });
     try {
-      await client.connect();
-      return;
+      await c.connect();
+      return c;
     } catch (e) {
+      await c.end().catch(() => {});
+      if (FATAL[e.code]) {
+        console.error(`[migrate] cannot connect: ${FATAL[e.code]} (${e.code}). Check DATABASE_URL.`);
+        process.exit(1);
+      }
       console.log(`[migrate] connection attempt ${i}/${attempts} failed: ${e.code || e.message}`);
       if (i === attempts) throw e;
       await new Promise((r) => setTimeout(r, 5000));
@@ -24,7 +30,7 @@ async function connectWithRetry(attempts = 6) {
   }
 }
 
-await connectWithRetry();
+const client = await connectWithRetry();
 await client.query(`CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
   "id" VARCHAR(36) PRIMARY KEY NOT NULL,
   "checksum" VARCHAR(64) NOT NULL,

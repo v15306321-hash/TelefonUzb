@@ -20,6 +20,7 @@ const port = Number(url.port || 5432);
 console.log(
   `[db-check] protocol=${url.protocol} user=${url.username ? url.username.slice(0, 3) + "…" : "(none)"} password=${url.password ? "set(" + url.password.length + ")" : "MISSING"} host=${host} port=${port} db=${url.pathname} params=${[...url.searchParams.keys()].join(",") || "(none)"}`,
 );
+if (/^\*+$/.test(decodeURIComponent(url.password))) console.log("[db-check] WARNING: password is masked with asterisks — copy the connection string with the real password");
 if (/\s/.test(raw.trim()) || /^['"]|['"]$/.test(raw.trim())) console.log("[db-check] WARNING: value contains spaces or quotes");
 
 try {
