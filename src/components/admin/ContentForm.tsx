@@ -88,7 +88,7 @@ export default function ContentForm({ initial }: { initial: SiteContent }) {
               label="Видео для мобильных (необязательно)"
               hint="Облегчённая версия. Если не задано — используется основное видео."
               accept="video/mp4,video/webm"
-              preview={media(c.heroVideoMobileAssetId) ?? (c.heroVideoAssetId ? null : "/media/hero-mobile.mp4")}
+              preview={media(c.heroVideoMobileAssetId) ?? (c.heroVideoAssetId ? null : "/media/hero-mobile-43.mp4")}
               isDefault={!c.heroVideoMobileAssetId}
               type="video"
               disabled={!!uploading}

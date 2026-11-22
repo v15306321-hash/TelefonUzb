@@ -51,9 +51,17 @@ export default async function HomePage({ params }: Params) {
     <div className="page-enter">
       {/* ---------------- HERO ---------------- */}
       <section className="relative isolate flex w-full flex-col overflow-hidden wide:h-[100svh] wide:min-h-[600px]" aria-label={dict.hero.videoLabel}>
-        {/* phones / portrait tablets: the whole storefront in a 4:3 frame under the header;
+        {/* phones / portrait tablets: the whole storefront in a 4:3 frame under the header, the
+            headline laid over its lower part and a blurred glow of the same picture behind the rest;
             wide screens: full-bleed background */}
-        <div className="relative mt-[calc(4rem+env(safe-area-inset-top))] aspect-[4/3] w-full md:mt-[calc(4.5rem+env(safe-area-inset-top))] wide:absolute wide:inset-0 wide:mt-0! wide:aspect-auto">
+        {media.heroPosterMobile && (
+          <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden wide:hidden" aria-hidden>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={media.heroPosterMobile} alt="" className="absolute inset-0 h-full w-full scale-150 object-cover opacity-45 blur-3xl saturate-150" />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/55 to-black" />
+          </div>
+        )}
+        <div className="relative mt-[calc(4rem+env(safe-area-inset-top))] aspect-[4/3] w-full md:mt-[calc(4.5rem+env(safe-area-inset-top))] [mask-image:linear-gradient(to_bottom,transparent_0%,#000_9%,#000_58%,transparent_100%)] wide:absolute wide:inset-0 wide:mt-0! wide:aspect-auto wide:[mask-image:none]">
           <HeroVideo
             src={media.heroVideo}
             mobileSrc={media.heroVideoMobile}
@@ -61,8 +69,7 @@ export default async function HomePage({ params }: Params) {
             mobilePoster={media.heroPosterMobile}
             label={dict.hero.videoLabel}
           />
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-[14%] bg-gradient-to-b from-black to-transparent wide:hidden" />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[38%] wide:hidden" style={{ background: HERO_FADE }} />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[60%] opacity-75 wide:hidden" style={{ background: HERO_FADE }} />
         </div>
         {/* top shade for header legibility */}
         <div className="pointer-events-none absolute inset-x-0 top-0 hidden h-40 bg-gradient-to-b from-black/55 to-transparent wide:block" />
@@ -71,9 +78,9 @@ export default async function HomePage({ params }: Params) {
         {/* soft scrim behind the headline for legibility over the bright shop window */}
         <div className="pointer-events-none absolute inset-0 hidden bg-[radial-gradient(ellipse_55%_40%_at_50%_66%,rgba(0,0,0,0.5),transparent_72%)] wide:block" />
 
-        <div className="container-x relative z-10 -mt-4 flex flex-col items-center pb-14 text-center wide:mt-auto wide:pb-[max(4.5rem,11svh)]">
-          <p className="eyebrow mb-4 !text-white/70 animate-fade-up">{dict.hero.eyebrow}</p>
-          <h1 className="headline max-w-4xl text-balance text-[2.2rem] text-white [text-shadow:0_2px_30px_rgba(0,0,0,0.45)] animate-fade-up [animation-delay:80ms] sm:text-6xl lg:text-7xl">
+        <div className="container-x relative z-10 -mt-[30vw] flex flex-col items-center pb-14 text-center wide:mt-auto! wide:pb-[max(4.5rem,11svh)]">
+          <p className="eyebrow mb-4 !text-white/80 [text-shadow:0_1px_12px_rgba(0,0,0,0.9)] animate-fade-up">{dict.hero.eyebrow}</p>
+          <h1 className="headline max-w-4xl text-balance text-[2.2rem] text-white [text-shadow:0_2px_24px_rgba(0,0,0,0.7)] animate-fade-up [animation-delay:80ms] sm:text-6xl lg:text-7xl">
             {pick(locale, content.heroTitleRu, content.heroTitleUz)}
           </h1>
           <p className="mt-4 max-w-xl text-balance text-[0.98rem] text-white/75 [text-shadow:0_1px_16px_rgba(0,0,0,0.6)] animate-fade-up [animation-delay:160ms] sm:mt-5 sm:text-lg">

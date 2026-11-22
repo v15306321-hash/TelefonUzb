@@ -27,8 +27,8 @@ export function resolveMedia(c: SiteContent): SiteMedia {
     logo: assetUrl(c.logoAssetId) ?? "/media/logo.webp",
     heroVideo,
     // a custom uploaded video replaces both desktop and mobile versions unless a mobile one is provided
-    heroVideoMobile: assetUrl(c.heroVideoMobileAssetId) ?? (c.heroVideoAssetId ? heroVideo : "/media/hero-mobile.mp4"),
+    heroVideoMobile: assetUrl(c.heroVideoMobileAssetId) ?? (c.heroVideoAssetId ? heroVideo : "/media/hero-mobile-43.mp4"),
     heroPoster: assetUrl(c.heroPosterAssetId) ?? (c.heroVideoAssetId ? "" : "/media/hero-poster.webp"),
-    heroPosterMobile: assetUrl(c.heroPosterAssetId) ?? (c.heroVideoAssetId ? "" : "/media/hero-poster-mobile.webp"),
+    heroPosterMobile: assetUrl(c.heroPosterAssetId) ?? (c.heroVideoAssetId ? "" : "/media/hero-poster-mobile-43.webp"),
   };
 }
