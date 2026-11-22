@@ -4,6 +4,8 @@ set -euo pipefail
 
 # Trim whitespace / quotes / a leading "psql " that may come from copy-pasting a connection snippet
 DB="$(printf '%s' "${DATABASE_URL:-}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e "s/^psql[[:space:]]*//" -e "s/^['\"]//" -e "s/['\"]$//")"
+# Prisma's engines do not support libpq's channel_binding parameter (Neon adds it by default) — drop it
+DB="$(printf '%s' "$DB" | sed -E -e 's/([?&])channel_binding=[^&]*&?/\1/' -e 's/[?&]$//')"
 # Managed Postgres providers (Neon, Supabase...) require TLS
 if [[ "$DB" != *"sslmode="* ]]; then
   if [[ "$DB" == *"?"* ]]; then DB="$DB&sslmode=require"; else DB="$DB?sslmode=require"; fi
