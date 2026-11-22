@@ -16,6 +16,11 @@ model AdminUser {
   /// Increment to invalidate all existing sessions of the user (logout everywhere / password change).
   tokenVersion Int       @default(0)
   lastLoginAt  DateTime?
+  /// TOTP secret (base32). Set while 2FA is being set up; 2FA is active once totpEnabledAt is set.
+  totpSecret    String?
+  totpEnabledAt DateTime?
+  /// last accepted 30-second step — a code cannot be used twice
+  totpLastStep  Int?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
@@ -52,14 +57,14 @@ model Product {
   descriptionUz String         @default("")
   /// Цена в сумах (UZS)
   price         Int
-  /// Специальная (акционная) цена в сумах
-  specialPrice  Int?
   inStock       Boolean        @default(true)
   isHidden      Boolean        @default(false)
   isFeatured    Boolean        @default(false)
   sortOrder     Int            @default(0)
   /// Варианты памяти, например ["256 GB", "512 GB"]
   storageOptions String[]      @default([])
+  /// Цена по объёму памяти: { "256 GB": 12500000 }; не указана — используется price
+  storagePrices Json           @default("{}")
   /// [{ nameRu, nameUz, hex }]
   colors        Json           @default("[]")
   /// [{ labelRu, labelUz, valueRu, valueUz }]

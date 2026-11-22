@@ -1,12 +1,14 @@
 "use server";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { revalidateTag } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireAdmin, startSession, endSession } from "@/lib/auth/server";
 import { dummyVerify, hashPassword, passwordProblems, verifyPassword } from "@/lib/auth/password";
+import { PREAUTH_COOKIE, PREAUTH_TTL_SECONDS, signPreauth, verifyPreauth } from "@/lib/auth/session";
+import { generateTotpSecret, verifyTotp } from "@/lib/auth/totp";
 import { rateLimit, resetRateLimit } from "@/lib/rate-limit";
 import { CATALOG_TAG } from "@/lib/catalog";
 import { SETTINGS_TAG, readSiteContent } from "@/lib/settings";
@@ -32,11 +34,42 @@ function uniqueError(e: unknown, field: string, message: string): ActionResult |
 
 /* ============================== AUTH ============================== */
 
-export async function loginAction(_prev: { error?: string; username?: string } | undefined, formData: FormData): Promise<{ error?: string; username?: string }> {
-  const username = String(formData.get("username") ?? "").trim().toLowerCase().slice(0, 60);
-  const password = String(formData.get("password") ?? "").slice(0, 200);
+export type LoginState = { error?: string; username?: string; step?: "code" } | undefined;
+
+export async function loginAction(_prev: LoginState, formData: FormData): Promise<LoginState> {
   const h = await headers();
   const ip = (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || h.get("x-real-ip") || "local";
+  const store = await cookies();
+
+  /* ---- step 2: one-time code from the authenticator app ---- */
+  if (formData.has("code")) {
+    const pre = await verifyPreauth(store.get(PREAUTH_COOKIE)?.value);
+    if (!pre) return { error: "Время на ввод кода истекло — войдите снова" };
+    const limit = rateLimit(`login-2fa:${pre.sub}`, 6, 15 * 60_000);
+    const byIp = rateLimit(`login-ip:${ip}`, 20, 15 * 60_000);
+    if (!limit.ok || !byIp.ok) {
+      store.delete(PREAUTH_COOKIE);
+      return { error: `Слишком много попыток. Повторите через ${Math.ceil(Math.max(limit.retryAfterSec, byIp.retryAfterSec) / 60)} мин.` };
+    }
+    const user = await prisma.adminUser.findUnique({ where: { id: pre.sub } });
+    if (!user || user.tokenVersion !== pre.ver || !user.totpEnabledAt || !user.totpSecret) {
+      store.delete(PREAUTH_COOKIE);
+      return { error: "Войдите снова" };
+    }
+    const step = verifyTotp(user.totpSecret, String(formData.get("code") ?? "").slice(0, 12), user.totpLastStep);
+    if (step === null) return { step: "code", username: user.username, error: "Неверный или уже использованный код" };
+    resetRateLimit(`login-2fa:${pre.sub}`);
+    resetRateLimit(`login-user:${user.username}`);
+    store.delete(PREAUTH_COOKIE);
+    await prisma.adminUser.update({ where: { id: user.id }, data: { lastLoginAt: new Date(), totpLastStep: step } });
+    await startSession(user);
+    await logActivity("login", "admin", user.id, `Вход в панель (2FA): ${user.username}`, user.username);
+    redirect("/admin");
+  }
+
+  /* ---- step 1: login + password ---- */
+  const username = String(formData.get("username") ?? "").trim().toLowerCase().slice(0, 60);
+  const password = String(formData.get("password") ?? "").slice(0, 200);
 
   const byIp = rateLimit(`login-ip:${ip}`, 20, 15 * 60_000);
   const byUser = rateLimit(`login-user:${username}`, 8, 15 * 60_000);
@@ -50,11 +83,73 @@ export async function loginAction(_prev: { error?: string; username?: string } |
   const valid = user ? await verifyPassword(password, user.passwordHash) : await dummyVerify(password);
   if (!user || !valid) return { error: "Неверный логин или пароль", username };
 
+  if (user.totpEnabledAt && user.totpSecret) {
+    store.set(PREAUTH_COOKIE, await signPreauth(user.id, user.tokenVersion), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/admin",
+      maxAge: PREAUTH_TTL_SECONDS,
+    });
+    return { step: "code", username };
+  }
+
   resetRateLimit(`login-user:${username}`);
   await prisma.adminUser.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
   await startSession(user);
   await logActivity("login", "admin", user.id, `Вход в панель: ${user.username}`, user.username);
   redirect("/admin");
+}
+
+/* ---------- two-factor authentication ---------- */
+
+export async function startTotpSetupAction() {
+  const admin = await requireAdmin();
+  const user = await prisma.adminUser.findUniqueOrThrow({ where: { id: admin.id } });
+  if (!user.totpEnabledAt) {
+    await prisma.adminUser.update({ where: { id: user.id }, data: { totpSecret: generateTotpSecret(), totpLastStep: null } });
+  }
+  revalidatePath("/admin/account");
+}
+
+export async function cancelTotpSetupAction() {
+  const admin = await requireAdmin();
+  await prisma.adminUser.updateMany({ where: { id: admin.id, totpEnabledAt: null }, data: { totpSecret: null } });
+  revalidatePath("/admin/account");
+}
+
+export async function confirmTotpAction(_prev: ActionResult | undefined, formData: FormData): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  const limit = rateLimit(`totp-setup:${admin.id}`, 10, 15 * 60_000);
+  if (!limit.ok) return { ok: false, error: "Слишком много попыток, подождите несколько минут" };
+  const user = await prisma.adminUser.findUniqueOrThrow({ where: { id: admin.id } });
+  if (user.totpEnabledAt) return { ok: true, message: "Двухфакторная защита уже включена" };
+  if (!user.totpSecret) return { ok: false, error: "Начните настройку заново" };
+  const step = verifyTotp(user.totpSecret, String(formData.get("code") ?? "").slice(0, 12), null);
+  if (step === null) return { ok: false, error: "Код не подошёл. Проверьте время на телефоне и введите новый код" };
+  // turning 2FA on signs out every other session
+  const updated = await prisma.adminUser.update({
+    where: { id: user.id },
+    data: { totpEnabledAt: new Date(), totpLastStep: step, tokenVersion: { increment: 1 } },
+  });
+  await startSession(updated);
+  await logActivity("update", "admin", user.id, "Включена двухфакторная защита входа", admin.username);
+  revalidatePath("/admin/account");
+  return { ok: true, message: "Двухфакторная защита включена. Остальные сессии завершены." };
+}
+
+export async function disableTotpAction(_prev: ActionResult | undefined, formData: FormData): Promise<ActionResult> {
+  const admin = await requireAdmin();
+  const limit = rateLimit(`totp-disable:${admin.id}`, 6, 15 * 60_000);
+  if (!limit.ok) return { ok: false, error: "Слишком много попыток, подождите несколько минут" };
+  const user = await prisma.adminUser.findUniqueOrThrow({ where: { id: admin.id } });
+  if (!user.totpEnabledAt || !user.totpSecret) return { ok: true, message: "Двухфакторная защита уже выключена" };
+  if (!(await verifyPassword(String(formData.get("password") ?? ""), user.passwordHash))) return { ok: false, error: "Неверный пароль" };
+  if (verifyTotp(user.totpSecret, String(formData.get("code") ?? "").slice(0, 12), user.totpLastStep) === null) return { ok: false, error: "Неверный код" };
+  await prisma.adminUser.update({ where: { id: user.id }, data: { totpSecret: null, totpEnabledAt: null, totpLastStep: null } });
+  await logActivity("update", "admin", user.id, "Двухфакторная защита входа выключена", admin.username);
+  revalidatePath("/admin/account");
+  return { ok: true, message: "Двухфакторная защита выключена" };
 }
 
 export async function logoutAction() {
@@ -113,6 +208,11 @@ export async function saveProductAction(raw: unknown): Promise<ActionResult<{ id
   const colorHexes = new Set(v.colors.map((c) => c.hex.toLowerCase()));
   const imageRows = v.images.map((img, i) => ({ assetId: img.assetId, sortOrder: i, colorKey: img.color && colorHexes.has(img.color) ? img.color : null }));
 
+  // only prices for listed storage options, and only those that differ from the base price
+  const storagePrices = Object.fromEntries(
+    v.storageOptions.filter((o) => v.storagePrices[o] && v.storagePrices[o] !== v.price).map((o) => [o, v.storagePrices[o]]),
+  );
+
   const data = {
     slug: v.slug,
     nameRu: v.nameRu,
@@ -120,7 +220,7 @@ export async function saveProductAction(raw: unknown): Promise<ActionResult<{ id
     descriptionRu: v.descriptionRu,
     descriptionUz: v.descriptionUz,
     price: v.price,
-    specialPrice: v.specialPrice && v.specialPrice > 0 ? v.specialPrice : null,
+    storagePrices,
     inStock: v.inStock,
     isHidden: v.isHidden,
     isFeatured: v.isFeatured,

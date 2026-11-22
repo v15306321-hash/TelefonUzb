@@ -27,6 +27,19 @@ async function main() {
     }
   }
 
+  // emergency: lost authenticator → set ADMIN_RESET_2FA=<username> in the hosting env, restart, then remove it
+  const reset2fa = (process.env.ADMIN_RESET_2FA ?? "").trim().toLowerCase();
+  if (reset2fa) {
+    const r = await prisma.adminUser.updateMany({
+      where: { username: reset2fa, totpEnabledAt: { not: null } },
+      data: { totpSecret: null, totpEnabledAt: null, totpLastStep: null, tokenVersion: { increment: 1 } },
+    });
+    if (r.count) {
+      await prisma.activityLog.create({ data: { action: "update", entity: "admin", summary: `2FA сброшена через ADMIN_RESET_2FA для ${reset2fa}` } });
+      console.log(`  ~ 2FA reset for "${reset2fa}" — remove ADMIN_RESET_2FA from the environment`);
+    }
+  }
+
   // --- taxonomy ---
   for (const c of categories) await prisma.category.upsert({ where: { slug: c.slug }, create: c, update: {} });
   for (const b of brands) await prisma.brand.upsert({ where: { slug: b.slug }, create: b, update: {} });
@@ -46,7 +59,6 @@ async function main() {
           descriptionRu: p.descriptionRu,
           descriptionUz: p.descriptionUz,
           price: p.price,
-          specialPrice: p.specialPrice ?? null,
           inStock: p.inStock ?? true,
           isHidden: p.hidden ?? false,
           isFeatured: p.isFeatured ?? false,
@@ -79,6 +91,16 @@ async function main() {
 
   // --- settings ---
   await prisma.siteSettings.upsert({ where: { id: 1 }, create: { id: 1, content: defaultSiteContent }, update: {} });
+  // one-time: the store's social handle (from its promo banner); never re-applied once the admin edits it
+  if (!(await prisma.activityLog.findFirst({ where: { action: "seed-social" } }))) {
+    const row = await prisma.siteSettings.findUnique({ where: { id: 1 } });
+    const content = { ...((row?.content as Record<string, unknown> | null) ?? {}) };
+    if (!content.telegramUrl) content.telegramUrl = "https://t.me/telefon_uzb";
+    if (!content.instagramUrl) content.instagramUrl = "https://www.instagram.com/telefon_uzb";
+    await prisma.siteSettings.update({ where: { id: 1 }, data: { content: content as object } });
+    await prisma.activityLog.create({ data: { action: "seed-social", entity: "settings", summary: "Ссылки Telegram/Instagram: telefon_uzb" } });
+    console.log("  ~ social links set");
+  }
   if ((await prisma.activityLog.count()) === 0) {
     await prisma.activityLog.create({ data: { action: "create", entity: "catalog", summary: "Каталог заполнен начальными данными" } });
   }

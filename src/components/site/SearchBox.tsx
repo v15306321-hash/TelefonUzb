@@ -13,7 +13,7 @@ type Suggestion = {
   brand: string;
   category: string;
   price: number;
-  specialPrice: number | null;
+  priceFrom: boolean;
   inStock: boolean;
   image: { url: string } | null;
 };
@@ -203,7 +203,7 @@ export default function SearchBox({
                         {it.brand} · {it.category}
                       </span>
                     </span>
-                    <span className="shrink-0 text-right text-sm font-semibold text-white">{formatPrice(it.specialPrice ?? it.price, locale)}</span>
+                    <span className="shrink-0 text-right text-sm font-semibold text-white">{it.priceFrom && <span className="font-normal text-white/45">{locale === "uz" ? "" : "от "}</span>}{formatPrice(it.price, locale)}{it.priceFrom && locale === "uz" ? <span className="font-normal text-white/45">dan</span> : null}</span>
                   </Link>
                 </li>
               ))}

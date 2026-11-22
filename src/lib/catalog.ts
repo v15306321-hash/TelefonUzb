@@ -5,7 +5,7 @@ import { prisma } from "./db";
 import { pick } from "./localize";
 import { buildDoc, searchDocs } from "./search";
 import { assetUrl } from "./storage";
-import { parseColors, parseSpecs, type ColorOption, type SpecItem } from "./types";
+import { parseColors, parseSpecs, parseStoragePrices, type ColorOption, type SpecItem } from "./types";
 
 export const CATALOG_TAG = "catalog";
 
@@ -19,12 +19,16 @@ export type CatalogProduct = {
   nameUz: string;
   descriptionRu: string;
   descriptionUz: string;
+  /** lowest price ("from") */
   price: number;
-  specialPrice: number | null;
+  /** true when storage options have different prices */
+  priceVaries: boolean;
   inStock: boolean;
   isFeatured: boolean;
   sortOrder: number;
   storageOptions: string[];
+  /** price for every storage option (falls back to the base price) */
+  storagePrices: Record<string, number>;
   colors: ColorOption[];
   specs: SpecItem[];
   images: CatalogImage[];
@@ -48,28 +52,34 @@ export const getVisibleProducts = unstable_cache(
         images: { orderBy: { sortOrder: "asc" }, include: { asset: { select: { id: true, width: true, height: true } } } },
       },
     });
-    return rows.map((p) => ({
+    return rows.map((p) => {
+      const custom = parseStoragePrices(p.storagePrices, p.storageOptions);
+      const storagePrices = Object.fromEntries(p.storageOptions.map((o) => [o, custom[o] ?? p.price]));
+      const all = Object.values(storagePrices);
+      return {
       id: p.id,
       slug: p.slug,
       nameRu: p.nameRu,
       nameUz: p.nameUz,
       descriptionRu: p.descriptionRu,
       descriptionUz: p.descriptionUz,
-      price: p.price,
-      specialPrice: p.specialPrice,
+      price: all.length ? Math.min(...all) : p.price,
+      priceVaries: new Set(all).size > 1,
       inStock: p.inStock,
       isFeatured: p.isFeatured,
       sortOrder: p.sortOrder,
       storageOptions: p.storageOptions,
+      storagePrices,
       colors: parseColors(p.colors),
       specs: parseSpecs(p.specs),
       images: p.images.map((i) => ({ url: assetUrl(i.asset.id)!, width: i.asset.width, height: i.asset.height, color: i.colorKey?.toLowerCase() ?? null })),
       brand: p.brand,
       category: p.category,
       createdAt: p.createdAt.toISOString(),
-    }));
+      };
+    });
   },
-  ["visible-products-v2"],
+  ["visible-products-v3"],
   { tags: [CATALOG_TAG], revalidate: 3600 },
 );
 
@@ -100,10 +110,6 @@ export async function getCatalogFacets(products: CatalogProduct[]) {
     categories: categories.map((c) => ({ ...c, count: catCount.get(c.id) ?? 0 })) as CatalogCategory[],
     brands: brands.map((b) => ({ ...b, count: brandCount.get(b.id) ?? 0 })).filter((b) => b.count > 0) as CatalogBrand[],
   };
-}
-
-export function effectivePrice(p: Pick<CatalogProduct, "price" | "specialPrice">) {
-  return p.specialPrice && p.specialPrice > 0 && p.specialPrice < p.price ? p.specialPrice : p.price;
 }
 
 export type CatalogQuery = {
@@ -142,10 +148,10 @@ export function queryCatalog(products: CatalogProduct[], q: CatalogQuery): Catal
   const sorted = [...list];
   switch (q.sort) {
     case "price_asc":
-      sorted.sort((a, b) => effectivePrice(a) - effectivePrice(b));
+      sorted.sort((a, b) => a.price - b.price);
       break;
     case "price_desc":
-      sorted.sort((a, b) => effectivePrice(b) - effectivePrice(a));
+      sorted.sort((a, b) => b.price - a.price);
       break;
     case "newest":
       sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -169,7 +175,8 @@ export type ProductCardData = {
   brand: string;
   category: string;
   price: number;
-  specialPrice: number | null;
+  /** show the price as "from …" */
+  priceFrom: boolean;
   inStock: boolean;
   image: CatalogImage | null;
   colors: string[];
@@ -182,7 +189,7 @@ export function toCard(p: CatalogProduct, locale: Locale): ProductCardData {
     brand: p.brand.name,
     category: pick(locale, p.category.nameRu, p.category.nameUz),
     price: p.price,
-    specialPrice: p.specialPrice && p.specialPrice < p.price ? p.specialPrice : null,
+    priceFrom: p.priceVaries,
     inStock: p.inStock,
     image: p.images[0] ?? null,
     colors: p.colors.map((c) => c.hex).slice(0, 5),

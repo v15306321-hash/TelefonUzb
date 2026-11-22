@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CatalogImage } from "@/lib/catalog";
+import SkeletonImage from "./SkeletonImage";
 
 type Labels = { photos: string; prev: string; next: string; open: string; close: string };
 
@@ -73,7 +74,7 @@ export default function ProductGallery({ images, alt, labels }: { images: Catalo
               className="relative h-full w-full shrink-0 snap-center cursor-zoom-in"
               aria-label={`${labels.open} ${i + 1} / ${images.length}`}
             >
-              <Image
+              <SkeletonImage
                 src={img.url}
                 alt={`${alt} — ${i + 1}`}
                 fill
@@ -113,7 +114,7 @@ export default function ProductGallery({ images, alt, labels }: { images: Catalo
               }`}
               aria-label={`${labels.photos} ${i + 1}`}
             >
-              <Image src={img.url} alt="" fill sizes="64px" className="object-contain" />
+              <SkeletonImage src={img.url} alt="" fill sizes="64px" className="object-contain" />
             </button>
           ))}
         </div>

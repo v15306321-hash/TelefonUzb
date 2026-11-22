@@ -26,7 +26,6 @@ type Seed = {
   descriptionRu: string;
   descriptionUz: string;
   price: number;
-  specialPrice?: number;
   inStock?: boolean;
   isFeatured?: boolean;
   storage: string[];
@@ -253,7 +252,6 @@ export const products: Seed[] = [
     descriptionRu: "Самый тонкий iPhone — 5,6 мм. Титановая рама, керамическое стекло Ceramic Shield 2 с двух сторон и мощный чип A19 Pro.",
     descriptionUz: "Eng yupqa iPhone — 5,6 mm. Titan ramka, ikki tomondan Ceramic Shield 2 shishasi va kuchli A19 Pro chipi.",
     price: 14_600_000,
-    specialPrice: 13_900_000,
     storage: ["256 GB", "512 GB", "1 TB"],
     colors: [c("Небесно-голубой", "Osmon ko‘k", "#c4d6e6"), c("Светлое золото", "Och oltin", "#e7d9bf"), c("Облачно-белый", "Bulutli oq", "#f0efeb"), c("Чёрный космос", "Kosmik qora", "#1d1d1f")],
     specs: [
@@ -299,7 +297,6 @@ export const products: Seed[] = [
     descriptionRu: "Кнопка «Управление камерой», чип A18 и Apple Intelligence. Отличный выбор по выгодной цене.",
     descriptionUz: "«Kamera boshqaruvi» tugmasi, A18 chipi va Apple Intelligence. Qulay narxdagi ajoyib tanlov.",
     price: 9_900_000,
-    specialPrice: 9_300_000,
     storage: ["128 GB", "256 GB"],
     colors: [c("Ультрамарин", "Ultramarin", "#5f72c8"), c("Бирюзовый", "Firuza", "#8ccbc4"), c("Розовый", "Pushti", "#f2b8c9"), c("Чёрный", "Qora", "#232325")],
     specs: [
@@ -321,7 +318,6 @@ export const products: Seed[] = [
     descriptionRu: "Титановый флагман со встроенным S Pen, 200-Мп камерой и процессором Snapdragon 8 Elite for Galaxy. Galaxy AI для перевода звонков, фото и заметок.",
     descriptionUz: "S Pen o‘rnatilgan titan flagman, 200 MP kamera va Snapdragon 8 Elite for Galaxy protsessori. Qo‘ng‘iroqlar, rasmlar va eslatmalar uchun Galaxy AI.",
     price: 16_200_000,
-    specialPrice: 15_300_000,
     isFeatured: true,
     storage: ["256 GB", "512 GB", "1 TB"],
     colors: [c("Titanium Silverblue", "Titanium Silverblue", "#6e7c8c"), c("Titanium Black", "Titanium Black", "#2a2a2c"), c("Titanium Gray", "Titanium Gray", "#8b8884"), c("Titanium Whitesilver", "Titanium Whitesilver", "#dededd")],

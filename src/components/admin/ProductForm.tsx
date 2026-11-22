@@ -20,7 +20,8 @@ export type ProductFormValue = {
   brandId: string;
   categoryId: string;
   price: string;
-  specialPrice: string;
+  /** price per storage option (empty = base price) */
+  storagePrices: Record<string, string>;
   inStock: boolean;
   isHidden: boolean;
   isFeatured: boolean;
@@ -122,7 +123,9 @@ export default function ProductForm({
         brandId: v.brandId,
         categoryId: v.categoryId,
         price: v.price.replace(/\s/g, ""),
-        specialPrice: v.specialPrice.replace(/\s/g, "") ? v.specialPrice.replace(/\s/g, "") : null,
+        storagePrices: Object.fromEntries(
+          v.storageOptions.map((o) => [o, (v.storagePrices[o] ?? "").replace(/\s/g, "")] as const).filter(([, n]) => n),
+        ),
         inStock: v.inStock,
         isHidden: v.isHidden,
         isFeatured: v.isFeatured,
@@ -211,12 +214,9 @@ export default function ProductForm({
           </Card>
 
           <Card title="Цена и наличие">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Цена, сум *" error={err("price")}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Цена, сум *" hint="Базовая цена. Для разных объёмов памяти цены задаются ниже, в «Варианты памяти»" error={err("price")}>
                 <Input inputMode="numeric" value={v.price} onChange={(e) => set("price", e.target.value.replace(/[^\d\s]/g, ""))} aria-invalid={!!err("price")} />
-              </Field>
-              <Field label="Специальная цена, сум" hint="Акция: показывается вместо обычной" error={err("specialPrice")}>
-                <Input inputMode="numeric" value={v.specialPrice} onChange={(e) => set("specialPrice", e.target.value.replace(/[^\d\s]/g, ""))} aria-invalid={!!err("specialPrice")} />
               </Field>
               <Field label="Порядок сортировки" hint="Меньше — выше в каталоге">
                 <Input inputMode="numeric" value={v.sortOrder} onChange={(e) => set("sortOrder", e.target.value.replace(/[^\d-]/g, ""))} />
@@ -241,14 +241,32 @@ export default function ProductForm({
           </Card>
 
           <Card title="Варианты памяти">
-            <div className="flex flex-wrap gap-2">
+            <p className="mb-3 text-xs text-white/45">У каждого объёма — своя цена. Пустое поле — базовая цена. В каталоге показывается «от» самой низкой цены.</p>
+            <div className="flex flex-col gap-2">
               {v.storageOptions.map((s, i) => (
-                <span key={s} className="inline-flex items-center gap-1.5 rounded-full bg-white/10 py-1.5 pl-3 pr-1.5 text-sm">
-                  {s}
-                  <button type="button" className="grid h-5 w-5 place-items-center rounded-full text-white/50 hover:bg-white/15 hover:text-white" onClick={() => set("storageOptions", v.storageOptions.filter((_, j) => j !== i))} aria-label={`Убрать ${s}`}>
+                <div key={s} className="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)_auto] items-center gap-2">
+                  <span className="truncate rounded-xl bg-white/10 px-3 py-2 text-sm font-medium">{s}</span>
+                  <Input
+                    inputMode="numeric"
+                    placeholder={v.price ? `${v.price} (базовая)` : "Цена, сум"}
+                    value={v.storagePrices[s] ?? ""}
+                    onChange={(e) => set("storagePrices", { ...v.storagePrices, [s]: e.target.value.replace(/[^\d\s]/g, "") })}
+                    aria-label={`Цена для ${s}, сум`}
+                    aria-invalid={!!err(`storagePrices.${s}`)}
+                  />
+                  <button
+                    type="button"
+                    className="grid h-9 w-9 place-items-center rounded-full text-white/50 hover:bg-white/10 hover:text-white"
+                    onClick={() => {
+                      const rest = { ...v.storagePrices };
+                      delete rest[s];
+                      setV((st) => ({ ...st, storageOptions: st.storageOptions.filter((_, j) => j !== i), storagePrices: rest }));
+                    }}
+                    aria-label={`Убрать ${s}`}
+                  >
                     ×
                   </button>
-                </span>
+                </div>
               ))}
               {!v.storageOptions.length && <span className="text-sm text-white/35">Не указаны</span>}
             </div>

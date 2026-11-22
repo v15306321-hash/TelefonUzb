@@ -134,14 +134,8 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
                     </td>
                     <td className="px-3 py-3 text-white/60">{p.category.nameRu}</td>
                     <td className="px-3 py-3 tabular-nums">
-                      {p.specialPrice ? (
-                        <>
-                          <span className="block text-signal-bright">{formatPrice(p.specialPrice, "ru")}</span>
-                          <span className="block text-xs text-white/35 line-through">{formatPrice(p.price, "ru")}</span>
-                        </>
-                      ) : (
-                        formatPrice(p.price, "ru")
-                      )}
+                      {formatPrice(p.price, "ru")}
+                      {Object.keys((p.storagePrices as object) ?? {}).length > 0 && <span className="block text-xs text-white/40">по объёмам</span>}
                     </td>
                     <ProductRowActions id={p.id} slug={p.slug} name={p.nameRu} inStock={p.inStock} isHidden={p.isHidden} />
                   </tr>

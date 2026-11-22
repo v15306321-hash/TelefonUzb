@@ -1,7 +1,12 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import type { Locale } from "@/i18n/config";
 import type { CatalogImage } from "@/lib/catalog";
+import { formatPrice } from "@/lib/localize";
+import { telegramTopic } from "@/lib/telegram";
+import type { InstallmentPlan } from "@/lib/types";
+import InstallmentCalculator, { monthlyPayment, type InstallmentLabels } from "./InstallmentCalculator";
 import ProductGallery from "./ProductGallery";
 
 type ColorView = { name: string; hex: string };
@@ -14,6 +19,8 @@ type Labels = {
   nextPhoto: string;
   openPhoto: string;
   closePhoto: string;
+  /** "или от {price}/мес в рассрочку" */
+  installmentShort: string;
 };
 
 export default function ProductShowcase({
@@ -21,8 +28,13 @@ export default function ProductShowcase({
   images,
   colors,
   storageOptions,
+  storagePrices,
+  basePrice,
+  locale,
+  installment,
   labels,
   header,
+  stock,
   actions,
   children,
 }: {
@@ -30,14 +42,31 @@ export default function ProductShowcase({
   images: CatalogImage[];
   colors: ColorView[];
   storageOptions: string[];
+  /** price for every storage option */
+  storagePrices: Record<string, number>;
+  basePrice: number;
+  locale: Locale;
+  installment: { plans: InstallmentPlan[]; phone?: string; labels: InstallmentLabels } | null;
   labels: Labels;
   header: ReactNode;
+  stock: ReactNode;
   actions: ReactNode;
   children?: ReactNode;
 }) {
   const [colorIdx, setColorIdx] = useState(0);
   const [storage, setStorage] = useState(storageOptions[0] ?? "");
   const hex = colors[colorIdx]?.hex.toLowerCase();
+  const price = (storage && storagePrices[storage]) || basePrice;
+  const colorName = colors[colorIdx]?.name;
+  const priceVaries = new Set(storageOptions.map((o) => storagePrices[o] ?? basePrice)).size > 1;
+
+  // the Telegram button sends the selected configuration
+  useEffect(() => {
+    telegramTopic.set([name, storage, colorName].filter(Boolean).join(", "));
+  }, [name, storage, colorName]);
+  useEffect(() => () => telegramTopic.set(null), []);
+
+  const lowestMonthly = installment?.plans.length ? Math.min(...installment.plans.map((pl) => monthlyPayment(price, pl))) : null;
 
   // photos of the selected colour (+ photos valid for every colour); all photos if none are linked
   const shown = useMemo(() => {
@@ -59,6 +88,13 @@ export default function ProductShowcase({
       {/* -------- info column -------- */}
       <div className="flex flex-col">
         {header}
+        <div className="mt-6 animate-fade-up [animation-delay:80ms]">
+          <p className="text-3xl font-semibold tracking-tight tabular-nums" aria-live="polite">
+            {formatPrice(price, locale)}
+          </p>
+          {lowestMonthly && <p className="mt-1.5 text-sm text-white/50">{labels.installmentShort.replace("{price}", formatPrice(lowestMonthly, locale))}</p>}
+        </div>
+        {stock}
 
         {colors.length > 0 && (
           <fieldset className="mt-8">
@@ -95,6 +131,7 @@ export default function ProductShowcase({
                   <input type="radio" name="storage" className="peer sr-only" checked={s === storage} onChange={() => setStorage(s)} />
                   <span className="block rounded-2xl border border-white/12 px-5 py-3 text-sm font-medium text-white/75 transition peer-checked:border-white peer-checked:bg-white peer-checked:text-black peer-focus-visible:ring-2 peer-focus-visible:ring-signal-bright hover:border-white/35">
                     {s}
+                    {priceVaries && <span className="mt-0.5 block text-[0.72rem] font-normal tabular-nums opacity-60">{formatPrice(storagePrices[s] ?? basePrice, locale)}</span>}
                   </span>
                 </label>
               ))}
@@ -102,6 +139,9 @@ export default function ProductShowcase({
           </fieldset>
         )}
 
+        {installment && installment.plans.length > 0 && (
+          <InstallmentCalculator price={price} plans={installment.plans} locale={locale} phone={installment.phone} labels={installment.labels} />
+        )}
         {actions}
         {children}
       </div>

@@ -8,6 +8,7 @@ import { OG_IMAGE, SITE_URL } from "@/lib/site";
 import Header from "@/components/site/Header";
 import Footer from "@/components/site/Footer";
 import LocaleSync from "@/components/site/LocaleSync";
+import TelegramButton from "@/components/site/TelegramButton";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
         <Header locale={locale} logo={media.logo} mainPhone={mainPhone} labels={{ ...dict.nav, ...dict.lang }} />
         <main id="main">{children}</main>
         <Footer locale={locale} dict={dict} content={content} logo={media.logo} />
+        <TelegramButton url={content.telegramUrl} labels={dict.telegram} />
         <LocaleSync locale={locale} />
       </body>
     </html>

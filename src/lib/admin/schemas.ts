@@ -21,13 +21,14 @@ export const productInputSchema = z
     descriptionUz: z.string().trim().max(5000).default(""),
     brandId: idSchema,
     categoryId: idSchema,
-    price: z.coerce.number().int("Цена — целое число").min(0).max(2_000_000_000),
-    specialPrice: z.coerce.number().int().min(0).max(2_000_000_000).nullable().default(null),
+    price: z.coerce.number().int("Цена — целое число").min(1, "Укажите цену").max(2_000_000_000),
     inStock: z.boolean(),
     isHidden: z.boolean(),
     isFeatured: z.boolean(),
     sortOrder: z.coerce.number().int().min(-10000).max(10000).default(0),
     storageOptions: z.array(z.string().trim().min(1).max(30)).max(12).default([]),
+    /** price per storage option; missing = base price */
+    storagePrices: z.record(z.string().max(30), z.coerce.number().int("Цена — целое число").min(1).max(2_000_000_000)).default({}),
     colors: z.array(colorOptionSchema).max(16).default([]),
     specs: z.array(specItemSchema).max(60).default([]),
     /** photos in display order; `color` = HEX of the colour shown (null = all colours) */
@@ -40,10 +41,6 @@ export const productInputSchema = z
       )
       .max(40)
       .default([]),
-  })
-  .refine((v) => v.specialPrice === null || v.specialPrice === 0 || v.specialPrice < v.price, {
-    message: "Специальная цена должна быть ниже обычной",
-    path: ["specialPrice"],
   });
 export type ProductInput = z.infer<typeof productInputSchema>;
 

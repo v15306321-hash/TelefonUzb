@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { isLocale, type Locale } from "@/i18n/config";
 import { getDictionary } from "@/i18n";
 import { t } from "@/i18n/format";
-import { effectivePrice, getProductBySlug, getVisibleProducts, toCard } from "@/lib/catalog";
+import { getProductBySlug, getVisibleProducts, toCard } from "@/lib/catalog";
 import { formatPrice, pick, telHref } from "@/lib/localize";
 import { getSiteContent } from "@/lib/settings";
 import { languageAlternates } from "@/lib/seo";
@@ -13,6 +13,7 @@ import ProductShowcase from "@/components/site/ProductShowcase";
 import ProductCard from "@/components/site/ProductCard";
 import { PhoneIcon } from "@/components/site/Header";
 import { PinIcon } from "@/components/site/ContactsSection";
+import TelegramButton from "@/components/site/TelegramButton";
 
 type Props = { params: Promise<{ locale: string; slug: string }> };
 
@@ -25,7 +26,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const name = pick(locale, p.nameRu, p.nameUz);
   const description = t(dict.meta.productDescription, {
     name,
-    price: formatPrice(effectivePrice(p), locale),
+    price: p.priceVaries ? t(dict.product.priceFrom, { price: formatPrice(p.price, locale) }) : formatPrice(p.price, locale),
     availability: p.inStock ? dict.product.inStock : dict.product.outOfStock,
   });
   return {
@@ -46,7 +47,6 @@ export default async function ProductPage({ params }: Props) {
 
   const name = pick(locale, p.nameRu, p.nameUz);
   const description = pick(locale, p.descriptionRu, p.descriptionUz);
-  const special = p.specialPrice && p.specialPrice < p.price ? p.specialPrice : null;
   const mainPhone = content.contacts[0]?.phone;
   const installmentPhone = content.contacts.find((c) => /рассроч/i.test(c.labelRu))?.phone ?? content.contacts[2]?.phone;
 
@@ -63,13 +63,23 @@ export default async function ProductPage({ params }: Props) {
     brand: { "@type": "Brand", name: p.brand.name },
     description: description || undefined,
     image: p.images.map((i) => `${SITE_URL}${i.url}`),
-    offers: {
-      "@type": "Offer",
-      priceCurrency: "UZS",
-      price: effectivePrice(p),
-      availability: p.inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
-      url: `${SITE_URL}/${locale}/product/${p.slug}`,
-    },
+    offers: p.priceVaries
+      ? {
+          "@type": "AggregateOffer",
+          priceCurrency: "UZS",
+          lowPrice: p.price,
+          highPrice: Math.max(...Object.values(p.storagePrices)),
+          offerCount: p.storageOptions.length,
+          availability: p.inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+          url: `${SITE_URL}/${locale}/product/${p.slug}`,
+        }
+      : {
+          "@type": "Offer",
+          priceCurrency: "UZS",
+          price: p.price,
+          availability: p.inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+          url: `${SITE_URL}/${locale}/product/${p.slug}`,
+        },
   };
 
   return (
@@ -87,6 +97,25 @@ export default async function ProductPage({ params }: Props) {
         images={p.images}
         colors={p.colors.map((c) => ({ name: pick(locale, c.nameRu, c.nameUz), hex: c.hex }))}
         storageOptions={p.storageOptions}
+        storagePrices={p.storagePrices}
+        basePrice={p.price}
+        locale={locale}
+        installment={
+          content.installmentEnabled
+            ? {
+                plans: content.installmentPlans,
+                phone: installmentPhone,
+                labels: {
+                  title: dict.product.installmentTitle,
+                  perMonth: dict.product.installmentPerMonth,
+                  months: dict.product.installmentMonths,
+                  total: dict.product.installmentTotal,
+                  note: dict.product.installmentNote,
+                  call: dict.product.installmentCall,
+                },
+              }
+            : null
+        }
         labels={{
           color: dict.product.color,
           storage: dict.product.storage,
@@ -95,6 +124,7 @@ export default async function ProductPage({ params }: Props) {
           nextPhoto: dict.product.nextPhoto,
           openPhoto: dict.product.openPhoto,
           closePhoto: dict.product.closePhoto,
+          installmentShort: dict.product.installmentShort,
         }}
         header={
           <div className="animate-fade-up">
@@ -102,17 +132,10 @@ export default async function ProductPage({ params }: Props) {
               {p.brand.name}
             </Link>
             <h1 className="headline mt-3 text-4xl sm:text-5xl xl:text-6xl">{name}</h1>
-            <div className="mt-6 flex flex-wrap items-end gap-x-4 gap-y-2">
-              <span className="text-3xl font-semibold tracking-tight">{formatPrice(special ?? p.price, locale)}</span>
-              {special && (
-                <>
-                  <span className="pb-1 text-lg text-white/35 line-through" aria-label={dict.product.oldPrice}>
-                    {formatPrice(p.price, locale)}
-                  </span>
-                  <span className="mb-1.5 rounded-full bg-signal px-2.5 py-1 text-xs font-semibold">{dict.product.specialPrice}</span>
-                </>
-              )}
-            </div>
+          </div>
+        }
+        stock={
+          <div>
             <p className={`mt-4 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm ${p.inStock ? "bg-ok/10 text-ok" : "bg-white/5 text-white/50"}`}>
               <span className={`h-2 w-2 rounded-full ${p.inStock ? "bg-ok shadow-[0_0_12px] shadow-ok" : "bg-white/30"}`} />
               {p.inStock ? dict.product.inStock : dict.product.outOfStock}
@@ -128,10 +151,14 @@ export default async function ProductPage({ params }: Props) {
               </a>
             )}
             <div className="grid grid-cols-2 gap-3">
-              {installmentPhone && (
-                <a href={telHref(installmentPhone)} className="btn btn-ghost !px-3 text-sm">
-                  {dict.product.installments}
-                </a>
+              {content.telegramUrl ? (
+                <TelegramButton variant="inline" url={content.telegramUrl} labels={dict.telegram} />
+              ) : (
+                installmentPhone && (
+                  <a href={telHref(installmentPhone)} className="btn btn-ghost !px-3 text-sm">
+                    {dict.product.installments}
+                  </a>
+                )
               )}
               <a href={content.locationUrl} target="_blank" rel="noopener noreferrer" className="btn btn-ghost !px-3 text-sm">
                 <PinIcon />

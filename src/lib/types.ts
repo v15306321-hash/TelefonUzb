@@ -20,6 +20,17 @@ export const specItemSchema = z.object({
 });
 export type SpecItem = z.infer<typeof specItemSchema>;
 
+/** { "256 GB": 12500000 } — only positive integer prices for listed options are kept. */
+export function parseStoragePrices(value: unknown, options: string[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) return out;
+  for (const o of options) {
+    const n = (value as Record<string, unknown>)[o];
+    if (typeof n === "number" && Number.isInteger(n) && n > 0) out[o] = n;
+  }
+  return out;
+}
+
 export function parseColors(value: unknown): ColorOption[] {
   const r = z.array(colorOptionSchema).safeParse(value);
   return r.success ? r.data : [];
@@ -54,6 +65,19 @@ export const bannerSchema = z.object({
 });
 export type Banner = z.infer<typeof bannerSchema>;
 
+export const installmentPlanSchema = z.object({
+  months: z.coerce.number().int("Срок — целое число месяцев").min(1).max(60),
+  /** markup over the cash price, % */
+  markup: z.coerce.number().min(0).max(300),
+});
+export type InstallmentPlan = z.infer<typeof installmentPlanSchema>;
+
+export const DEFAULT_INSTALLMENT_PLANS: InstallmentPlan[] = [
+  { months: 3, markup: 0 },
+  { months: 6, markup: 0 },
+  { months: 12, markup: 0 },
+];
+
 export const siteContentSchema = z.object({
   logoAssetId: z.string().max(40).nullable().default(null),
   heroVideoAssetId: z.string().max(40).nullable().default(null),
@@ -76,6 +100,8 @@ export const siteContentSchema = z.object({
   instagramUrl: z.string().trim().max(300).default(""),
   contacts: z.array(contactSchema).max(10),
   banners: z.array(bannerSchema).max(10).default([]),
+  installmentEnabled: z.boolean().default(true),
+  installmentPlans: z.array(installmentPlanSchema).max(6).default(DEFAULT_INSTALLMENT_PLANS),
 });
 export type SiteContent = z.infer<typeof siteContentSchema>;
 
@@ -107,4 +133,6 @@ export const defaultSiteContent: SiteContent = {
     { labelRu: "Рассрочка", labelUz: "Muddatli to‘lov", phone: "+998 98 155 1990" },
   ],
   banners: [],
+  installmentEnabled: true,
+  installmentPlans: DEFAULT_INSTALLMENT_PLANS,
 };

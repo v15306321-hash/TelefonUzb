@@ -37,3 +37,29 @@ export async function verifySession(token: string | undefined | null): Promise<S
     return null;
   }
 }
+
+/* ---- second step of login (2FA): short-lived proof that the password was correct ---- */
+
+export const PREAUTH_COOKIE = "tuzb_2fa";
+export const PREAUTH_TTL_SECONDS = 5 * 60;
+
+export async function signPreauth(userId: string, ver: number) {
+  return new SignJWT({ ver, step: "totp" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(userId)
+    .setIssuedAt()
+    .setIssuer("telefonuzb-admin-2fa")
+    .setExpirationTime(`${PREAUTH_TTL_SECONDS}s`)
+    .sign(secretKey());
+}
+
+export async function verifyPreauth(token: string | undefined | null): Promise<{ sub: string; ver: number } | null> {
+  if (!token) return null;
+  try {
+    const { payload } = await jwtVerify(token, secretKey(), { issuer: "telefonuzb-admin-2fa", algorithms: ["HS256"] });
+    if (typeof payload.sub !== "string" || typeof payload.ver !== "number" || payload.step !== "totp") return null;
+    return { sub: payload.sub, ver: payload.ver };
+  } catch {
+    return null;
+  }
+}

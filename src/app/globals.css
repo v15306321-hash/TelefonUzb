@@ -251,3 +251,23 @@
 body[data-catalog-pending] .catalog-grid {
   opacity: 0.45;
 }
+
+/* ---------- image placeholders ---------- */
+.skeleton {
+  background: linear-gradient(100deg, rgb(0 0 0 / 0.045) 30%, rgb(0 0 0 / 0.1) 50%, rgb(0 0 0 / 0.045) 70%);
+  background-size: 300% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}

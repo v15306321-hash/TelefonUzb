@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "../db";
 import { assetUrl } from "../storage";
-import { parseColors, parseSpecs } from "../types";
+import { parseColors, parseSpecs, parseStoragePrices } from "../types";
 import type { ProductFormValue } from "@/components/admin/ProductForm";
 
 export async function loadFormOptions() {
@@ -28,7 +28,7 @@ export async function loadProductForm(id: string): Promise<ProductFormValue | nu
     brandId: p.brandId,
     categoryId: p.categoryId,
     price: String(p.price),
-    specialPrice: p.specialPrice ? String(p.specialPrice) : "",
+    storagePrices: Object.fromEntries(Object.entries(parseStoragePrices(p.storagePrices, p.storageOptions)).map(([k, n]) => [k, String(n)])),
     inStock: p.inStock,
     isHidden: p.isHidden,
     isFeatured: p.isFeatured,
@@ -49,7 +49,7 @@ export const emptyProductForm = (brandId = "", categoryId = ""): ProductFormValu
   brandId,
   categoryId,
   price: "",
-  specialPrice: "",
+  storagePrices: {},
   inStock: true,
   isHidden: false,
   isFeatured: false,

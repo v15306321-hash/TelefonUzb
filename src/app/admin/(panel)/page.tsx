@@ -16,7 +16,7 @@ export default async function Dashboard() {
     prisma.category.count(),
     prisma.brand.count(),
     prisma.product.findMany({ orderBy: { createdAt: "desc" }, take: 6, include: { brand: true } }),
-    prisma.activityLog.findMany({ orderBy: { createdAt: "desc" }, take: 12, where: { action: { notIn: ["login", "seed-photo"] } } }),
+    prisma.activityLog.findMany({ orderBy: { createdAt: "desc" }, take: 12, where: { action: { notIn: ["login", "seed-photo", "seed-social"] } } }),
   ]);
 
   const stats = [
@@ -62,7 +62,7 @@ export default async function Dashboard() {
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
-                    <span className="text-sm tabular-nums text-white/70">{formatPrice(p.specialPrice ?? p.price, "ru")}</span>
+                    <span className="text-sm tabular-nums text-white/70">{formatPrice(p.price, "ru")}</span>
                     {p.isHidden ? <Badge tone="muted">скрыт</Badge> : p.inStock ? <Badge tone="ok">в наличии</Badge> : <Badge tone="warn">нет</Badge>}
                   </span>
                 </Link>

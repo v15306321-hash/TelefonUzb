@@ -1,5 +1,5 @@
 /**
- * Create an admin or reset an existing admin's password:
+ * Create an admin or reset an existing admin's password (also switches off 2FA for that admin):
  *   ADMIN_USERNAME=owner ADMIN_PASSWORD='S3cure-pass-2026' npm run admin:create
  */
 import { createPrisma } from "../src/lib/prisma-factory";
@@ -16,7 +16,8 @@ async function main() {
   const user = await prisma.adminUser.upsert({
     where: { username },
     create: { username, passwordHash },
-    update: { passwordHash, tokenVersion: { increment: 1 } },
+    // a password reset is also the recovery path for a lost authenticator: 2FA is switched off
+    update: { passwordHash, tokenVersion: { increment: 1 }, totpSecret: null, totpEnabledAt: null, totpLastStep: null },
   });
   console.log(`✓ admin "${user.username}" is ready (all previous sessions of this user were signed out)`);
 }

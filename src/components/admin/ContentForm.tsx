@@ -168,6 +168,41 @@ export default function ContentForm({ initial }: { initial: SiteContent }) {
         </Card>
 
         <Card
+          title="Рассрочка"
+          actions={
+            <Button size="sm" onClick={() => set("installmentPlans", [...c.installmentPlans, { months: 12, markup: 0 }])} disabled={c.installmentPlans.length >= 6}>
+              + Срок
+            </Button>
+          }
+        >
+          <Toggle
+            label="Калькулятор рассрочки на странице товара"
+            description="Показывает примерный ежемесячный платёж"
+            checked={c.installmentEnabled}
+            onChange={(x) => set("installmentEnabled", x)}
+          />
+          <div className="mt-4 flex flex-col gap-2">
+            {c.installmentPlans.map((pl, i) => {
+              const upd = (patch: Partial<typeof pl>) => set("installmentPlans", c.installmentPlans.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+              return (
+                <div key={i} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+                  <Field label={i === 0 ? "Срок, месяцев" : ""}>
+                    <Input inputMode="numeric" value={String(pl.months)} onChange={(e) => upd({ months: Number(e.target.value.replace(/\D/g, "")) || 0 })} />
+                  </Field>
+                  <Field label={i === 0 ? "Наценка, %" : ""}>
+                    <Input inputMode="decimal" value={String(pl.markup)} onChange={(e) => upd({ markup: Number(e.target.value.replace(",", ".").replace(/[^\d.]/g, "")) || 0 })} />
+                  </Field>
+                  <Button size="sm" variant="danger" onClick={() => set("installmentPlans", c.installmentPlans.filter((_, j) => j !== i))} aria-label="Удалить срок">×</Button>
+                </div>
+              );
+            })}
+            <p className="text-xs text-white/35">
+              Ежемесячный платёж = цена × (1 + наценка%) ÷ срок. Укажите реальную наценку для каждого срока — покупатель увидит её в расчёте. 0% — без наценки.
+            </p>
+          </div>
+        </Card>
+
+        <Card
           title="Рекламные баннеры"
           actions={
             <Button
