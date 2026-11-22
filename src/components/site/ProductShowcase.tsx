@@ -12,6 +12,8 @@ type Labels = {
   color: string;
   storage: string;
   dragHint: string;
+  zoomIn: string;
+  zoomOut: string;
   loading3d: string;
   fallback3d: string;
   view3d: string;
@@ -63,7 +65,7 @@ export default function ProductShowcase({
               modelUrl={modelUrl}
               fallbackImage={images[0] ?? null}
               alt={name}
-              labels={{ dragHint: labels.dragHint, loading: labels.loading3d, fallback: labels.fallback3d }}
+              labels={{ dragHint: labels.dragHint, loading: labels.loading3d, fallback: labels.fallback3d, zoomIn: labels.zoomIn, zoomOut: labels.zoomOut }}
             />
           )}
         </div>

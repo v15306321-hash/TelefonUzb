@@ -1,117 +1,157 @@
 /**
- * Rotation state machine for the product viewer.
+ * Interaction state machine for the product viewer (orientation as a quaternion → free 360°
+ * rotation around both axes without gimbal flips).
  *
- *  auto      — continuous 360° turn around the vertical axis; speed eases in (no jumps)
- *  drag      — user rotates freely (Y unlimited, X clamped); auto rotation paused
- *  hold      — short pause after release
- *  returning — critically-damped spring back to the initial pose, then → auto
- *
- * Pure logic (no React / three imports) so it is easy to test and reuse.
+ *  auto      — continuous turntable rotation around the vertical axis; speed eases in
+ *  drag      — the user rotates freely (trackball: horizontal drag → vertical axis,
+ *              vertical drag → horizontal axis); auto rotation paused
+ *  hold      — short pause after release (longer when zoomed in, to inspect details)
+ *  returning — smooth slerp back to the initial pose (and zoom 1×), then → auto
  */
+import * as THREE from "three";
 
 export const TAU = Math.PI * 2;
 
 export type RotationOptions = {
-  /** seconds per full revolution in auto mode */
   revolutionSeconds: number;
-  /** vertical tilt limit (radians) */
-  maxTilt: number;
-  /** delay after release before returning (seconds) */
   holdSeconds: number;
-  /** initial pose */
-  baseX: number;
-  baseY: number;
+  holdSecondsZoomed: number;
+  minZoom: number;
+  maxZoom: number;
 };
 
 export const defaultRotationOptions: RotationOptions = {
   revolutionSeconds: 14,
-  maxTilt: 0.55,
-  holdSeconds: 0.7,
-  baseX: 0,
-  baseY: 0,
+  holdSeconds: 0.9,
+  holdSecondsZoomed: 4,
+  minZoom: 0.8,
+  maxZoom: 2.6,
 };
 
 export type RotationState = {
   mode: "auto" | "drag" | "hold" | "returning";
-  x: number;
-  y: number;
-  targetX: number;
-  targetY: number;
-  vx: number;
-  vy: number;
+  /** rendered orientation */
+  q: THREE.Quaternion;
+  /** orientation the drag is heading to (q follows it smoothly) */
+  target: THREE.Quaternion;
   speed: number;
   holdLeft: number;
-  returnToY: number;
+  zoom: number;
+  zoomTarget: number;
+  /** camera pan (scene units) — zoom aims at the point under the cursor / fingers */
+  pan: THREE.Vector2;
+  panTarget: THREE.Vector2;
+  /** pending zoom request: previous zoom and focus point in normalised viewport coords (-1..1) */
+  zoomRequest: { from: number; u: number; v: number } | null;
 };
 
-export function createRotationState(o: RotationOptions = defaultRotationOptions): RotationState {
-  return { mode: "auto", x: o.baseX, y: o.baseY, targetX: o.baseX, targetY: o.baseY, vx: 0, vy: 0, speed: 0, holdLeft: 0, returnToY: o.baseY };
-}
+const IDENTITY = new THREE.Quaternion();
+const AXIS_Y = new THREE.Vector3(0, 1, 0);
+const AXIS_X = new THREE.Vector3(1, 0, 0);
+const tmp = new THREE.Quaternion();
 
-const damp = (current: number, target: number, lambda: number, dt: number) =>
-  current + (target - current) * (1 - Math.exp(-lambda * dt));
+export function createRotationState(): RotationState {
+  return {
+    mode: "auto",
+    q: new THREE.Quaternion(),
+    target: new THREE.Quaternion(),
+    speed: 0,
+    holdLeft: 0,
+    zoom: 1,
+    zoomTarget: 1,
+    pan: new THREE.Vector2(),
+    panTarget: new THREE.Vector2(),
+    zoomRequest: null,
+  };
+}
 
 export function beginDrag(s: RotationState) {
   s.mode = "drag";
-  s.targetX = s.x;
-  s.targetY = s.y;
-  s.vx = 0;
-  s.vy = 0;
+  s.target.copy(s.q);
   s.speed = 0;
 }
 
-/** dx/dy are normalised pointer deltas (fraction of viewer width). */
-export function dragBy(s: RotationState, dx: number, dy: number, o: RotationOptions = defaultRotationOptions) {
+/** dx/dy: pointer movement as a fraction of the viewer width */
+export function dragBy(s: RotationState, dx: number, dy: number) {
   if (s.mode !== "drag") beginDrag(s);
-  s.targetY += dx * Math.PI * 1.6;
-  s.targetX = Math.max(o.baseX - o.maxTilt, Math.min(o.baseX + o.maxTilt, s.targetX + dy * Math.PI * 1.1));
+  // rotations about the camera (world) axes, pre-multiplied → intuitive trackball
+  s.target.premultiply(tmp.setFromAxisAngle(AXIS_Y, dx * Math.PI * 1.6));
+  s.target.premultiply(tmp.setFromAxisAngle(AXIS_X, dy * Math.PI * 1.6));
+  s.target.normalize();
 }
 
 export function endDrag(s: RotationState, o: RotationOptions = defaultRotationOptions) {
   if (s.mode !== "drag") return;
   s.mode = "hold";
-  s.holdLeft = o.holdSeconds;
+  s.holdLeft = s.zoomTarget > 1.05 ? o.holdSecondsZoomed : o.holdSeconds;
+}
+
+/** u/v: focus point in normalised viewport coordinates (-1..1, y up); default = centre of the view */
+export function zoomBy(s: RotationState, factor: number, u = 0, v = 0, o: RotationOptions = defaultRotationOptions) {
+  s.zoomRequest = { from: s.zoomRequest?.from ?? s.zoomTarget, u, v };
+  s.zoomTarget = THREE.MathUtils.clamp(s.zoomTarget * factor, o.minZoom, o.maxZoom);
+  if (s.mode === "auto" || s.mode === "returning") {
+    // inspecting: stop the turntable, return later
+    s.target.copy(s.q);
+    s.mode = "hold";
+    s.speed = 0;
+  }
+  if (s.mode === "hold") s.holdLeft = Math.max(s.holdLeft, o.holdSecondsZoomed);
+}
+
+const damp = (lambda: number, dt: number) => 1 - Math.exp(-lambda * dt);
+
+/**
+ * Resolve a pending zoom request so that the point under the cursor stays in place.
+ * halfH: half of the visible height at zoom 1 on the device plane; bounds: max pan (half device size).
+ */
+export function applyZoomFocus(s: RotationState, halfH: number, aspect: number, boundX: number, boundY: number) {
+  const r = s.zoomRequest;
+  if (!r) return;
+  s.zoomRequest = null;
+  if (s.zoomTarget <= 1.001) {
+    s.panTarget.set(0, 0);
+    return;
+  }
+  const hOld = halfH / r.from;
+  const hNew = halfH / s.zoomTarget;
+  const wx = s.panTarget.x + r.u * hOld * aspect;
+  const wy = s.panTarget.y + r.v * hOld;
+  s.panTarget.set(
+    THREE.MathUtils.clamp(wx - r.u * hNew * aspect, -boundX, boundX),
+    THREE.MathUtils.clamp(wy - r.v * hNew, -boundY, boundY),
+  );
 }
 
 export function step(s: RotationState, rawDt: number, o: RotationOptions = defaultRotationOptions, reducedMotion = false) {
-  const dt = Math.min(rawDt, 1 / 20); // avoid jumps after tab switches / frame drops
+  const dt = Math.min(rawDt, 1 / 20); // no jumps after frame drops / tab switches
   const autoSpeed = (TAU / o.revolutionSeconds) * (reducedMotion ? 0.5 : 1);
+  s.zoom += (s.zoomTarget - s.zoom) * damp(10, dt);
+  s.pan.lerp(s.panTarget, damp(10, dt));
 
   switch (s.mode) {
     case "auto":
-      s.speed = damp(s.speed, autoSpeed, 1.6, dt); // smooth ease-in of rotation speed
-      s.y += s.speed * dt;
-      s.x = damp(s.x, o.baseX, 4, dt);
-      if (s.y - o.baseY > TAU * 1000) s.y -= TAU * 1000; // keep numbers small
+      s.speed += (autoSpeed - s.speed) * damp(1.6, dt); // ease-in, no sudden start
+      s.q.premultiply(tmp.setFromAxisAngle(AXIS_Y, s.speed * dt)).normalize();
       break;
     case "drag":
-    case "hold": {
-      s.y = damp(s.y, s.targetY, 14, dt);
-      s.x = damp(s.x, s.targetX, 14, dt);
+    case "hold":
+      s.q.slerp(s.target, damp(14, dt));
       if (s.mode === "hold") {
         s.holdLeft -= dt;
         if (s.holdLeft <= 0) {
           s.mode = "returning";
-          // nearest equivalent of the initial pose → shortest way back to the front
-          s.returnToY = o.baseY + Math.round((s.y - o.baseY) / TAU) * TAU;
-          s.vx = 0;
-          s.vy = 0;
+          s.zoomTarget = 1;
+          s.panTarget.set(0, 0);
         }
       }
       break;
-    }
     case "returning": {
-      // critically damped spring (no overshoot), integrated semi-implicitly
-      const k = 26;
-      const c = 2 * Math.sqrt(k);
-      s.vy += (k * (s.returnToY - s.y) - c * s.vy) * dt;
-      s.vx += (k * (o.baseX - s.x) - c * s.vx) * dt;
-      s.y += s.vy * dt;
-      s.x += s.vx * dt;
-      if (Math.abs(s.returnToY - s.y) < 0.0015 && Math.abs(o.baseX - s.x) < 0.0015 && Math.abs(s.vy) < 0.02) {
-        s.y = o.baseY + (s.returnToY - o.baseY) - Math.round((s.returnToY - o.baseY) / TAU) * TAU; // == baseY, visually identical
-        s.x = o.baseX;
-        s.vx = s.vy = 0;
+      s.q.slerp(IDENTITY, damp(3.2, dt));
+      if (s.q.angleTo(IDENTITY) < 0.0015 && Math.abs(s.zoom - 1) < 0.003 && s.pan.lengthSq() < 1e-8) {
+        s.q.identity();
+        s.zoom = 1;
+        s.pan.set(0, 0);
         s.speed = 0;
         s.mode = "auto";
       }

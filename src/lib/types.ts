@@ -32,11 +32,14 @@ export const cameraLayouts = [
   "single",
 ] as const;
 export const frameFinishes = ["titanium", "aluminium", "polished"] as const;
+/** Exact device models with dedicated 3D geometry (see components/viewer/device-specs.ts). */
+export const devicePresets = ["iphone-11", "iphone-13", "iphone-13-pro", "iphone-15", "iphone-17-pro"] as const;
 
 export const model3dSchema = z.object({
   kind: z.enum(deviceKinds).default("phone"),
   layout: z.enum(cameraLayouts).default("pro-triangle"),
   frame: z.enum(frameFinishes).default("aluminium"),
+  preset: z.enum(devicePresets).optional(),
 });
 export type Model3DConfig = z.infer<typeof model3dSchema>;
 

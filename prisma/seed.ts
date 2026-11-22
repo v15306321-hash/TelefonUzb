@@ -63,6 +63,11 @@ async function main() {
       });
       created++;
     }
+    // upgrade older records to the exact-model 3D preset (keeps any admin changes otherwise)
+    const current = (product.model3d ?? {}) as Record<string, unknown>;
+    if (p.model3d.preset && !current.preset) {
+      await prisma.product.update({ where: { id: product.id }, data: { model3d: { ...current, preset: p.model3d.preset } } });
+    }
     // attach real product photos if the product has none yet
     if (product.images.length === 0 && p.photos?.length) {
       const files = p.photos.map((n) => path.join(PHOTO_DIR, `${n}.webp`)).filter((f) => existsSync(f));

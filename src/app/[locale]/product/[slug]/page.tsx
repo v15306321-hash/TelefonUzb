@@ -93,6 +93,8 @@ export default async function ProductPage({ params }: Props) {
           color: dict.product.color,
           storage: dict.product.storage,
           dragHint: dict.product.dragHint,
+          zoomIn: dict.product.zoomIn,
+          zoomOut: dict.product.zoomOut,
           loading3d: dict.product.loading3d,
           fallback3d: dict.product.fallback3d,
           view3d: dict.product.view3d,

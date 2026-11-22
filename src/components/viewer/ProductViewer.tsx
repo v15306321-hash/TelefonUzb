@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Model3DConfig } from "@/lib/types";
-import { beginDrag, createRotationState, dragBy, endDrag } from "./rotation";
+import { beginDrag, createRotationState, dragBy, endDrag, zoomBy } from "./rotation";
 
 const ViewerCanvas = dynamic(() => import("./ViewerCanvas"), { ssr: false });
 
@@ -14,7 +14,7 @@ type Props = {
   modelUrl?: string | null;
   fallbackImage?: { url: string; width: number | null; height: number | null } | null;
   alt: string;
-  labels: { dragHint: string; loading: string; fallback: string };
+  labels: { dragHint: string; loading: string; fallback: string; zoomIn?: string; zoomOut?: string };
 };
 
 function detectWebGL(): boolean {
@@ -29,12 +29,18 @@ function detectWebGL(): boolean {
   }
 }
 
-/** Very weak devices get the photo instead of the real-time renderer. */
+/** Very weak devices / data saver get the photo instead of the real-time renderer. */
 function isLowEndDevice(): boolean {
   const nav = navigator as Navigator & { deviceMemory?: number; connection?: { saveData?: boolean } };
   if (nav.connection?.saveData) return true;
   if (typeof nav.deviceMemory === "number" && nav.deviceMemory < 2) return true;
   return typeof nav.hardwareConcurrency === "number" && nav.hardwareConcurrency < 2;
+}
+
+/** Pointer position → normalised viewport coordinates (-1..1, y up). */
+function focusOf(el: HTMLElement, x: number, y: number): [number, number] {
+  const r = el.getBoundingClientRect();
+  return [((x - r.left) / r.width) * 2 - 1, -(((y - r.top) / r.height) * 2 - 1)];
 }
 
 class ViewerErrorBoundary extends Component<{ onError: () => void; children: ReactNode }, { failed: boolean }> {
@@ -63,7 +69,8 @@ export default function ProductViewer({ config, color, modelUrl, fallbackImage, 
   const [interacted, setInteracted] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [pageVisible, setPageVisible] = useState(true);
-  const pointer = useRef<{ id: number; x: number; y: number } | null>(null);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<number | null>(null);
 
   useEffect(() => {
     setSupport(detectWebGL() && !isLowEndDevice() ? "webgl" : "none");
@@ -79,7 +86,7 @@ export default function ProductViewer({ config, color, modelUrl, fallbackImage, 
     };
   }, []);
 
-  // Defer loading of three.js + model until the viewer is (nearly) visible, pause when off-screen.
+  // Load three.js + model only when the viewer is (nearly) visible; pause rendering off-screen.
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -94,38 +101,84 @@ export default function ProductViewer({ config, color, modelUrl, fallbackImage, 
     return () => io.disconnect();
   }, []);
 
-  // Model / colour switch → show loader again until first frames are rendered
   useEffect(() => setReady(false), [modelUrl]);
+
+  // Ctrl/⌘ + wheel and trackpad pinch (reported as ctrl+wheel) zoom; plain wheel keeps scrolling the page.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el || support !== "webgl") return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const [u, v] = focusOf(el, e.clientX, e.clientY);
+      zoomBy(stateRef.current, Math.exp(-e.deltaY * 0.01), u, v);
+      setInteracted(true);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [support]);
+
+  const pinchCenter = () => {
+    const [a, b] = [...pointers.current.values()];
+    return a && b ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } : { x: 0, y: 0 };
+  };
+  const pinchDistance = () => {
+    const [a, b] = [...pointers.current.values()];
+    return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+  };
 
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    if (pointer.current) return; // ignore second finger
-    pointer.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+    if ((e.target as HTMLElement).closest("button")) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     e.currentTarget.setPointerCapture(e.pointerId);
-    beginDrag(stateRef.current);
-    setDragging(true);
+    if (pointers.current.size === 2) {
+      pinch.current = pinchDistance();
+    } else {
+      beginDrag(stateRef.current);
+      setDragging(true);
+    }
     setInteracted(true);
   }, []);
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const p = pointer.current;
-    if (!p || p.id !== e.pointerId) return;
-    const w = e.currentTarget.clientWidth || 1;
-    dragBy(stateRef.current, (e.clientX - p.x) / w, (e.clientY - p.y) / w);
+    const p = pointers.current.get(e.pointerId);
+    if (!p) return;
+    const prev = { ...p };
     p.x = e.clientX;
     p.y = e.clientY;
+    if (pointers.current.size >= 2) {
+      const dist = pinchDistance();
+      if (pinch.current && dist > 0 && wrapRef.current) {
+        const c = pinchCenter();
+        const [u, v] = focusOf(wrapRef.current, c.x, c.y);
+        zoomBy(stateRef.current, dist / pinch.current, u, v);
+      }
+      pinch.current = dist;
+      return;
+    }
+    const w = e.currentTarget.clientWidth || 1;
+    dragBy(stateRef.current, (p.x - prev.x) / w, (p.y - prev.y) / w);
   }, []);
 
   const onPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    const p = pointer.current;
-    if (!p || p.id !== e.pointerId) return;
-    pointer.current = null;
-    endDrag(stateRef.current);
-    setDragging(false);
+    if (!pointers.current.has(e.pointerId)) return;
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size < 2) pinch.current = null;
+    if (pointers.current.size === 1) {
+      beginDrag(stateRef.current); // continue rotating with the remaining finger
+      return;
+    }
+    if (pointers.current.size === 0) {
+      endDrag(stateRef.current);
+      setDragging(false);
+    }
   }, []);
 
   const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    const map: Record<string, [number, number]> = { ArrowLeft: [-0.06, 0], ArrowRight: [0.06, 0], ArrowUp: [0, -0.04], ArrowDown: [0, 0.04] };
+    const map: Record<string, [number, number]> = { ArrowLeft: [-0.06, 0], ArrowRight: [0.06, 0], ArrowUp: [0, -0.06], ArrowDown: [0, 0.06] };
+    if (e.key === "+" || e.key === "=") return zoomBy(stateRef.current, 1.2);
+    if (e.key === "-") return zoomBy(stateRef.current, 1 / 1.2);
     const d = map[e.key];
     if (!d) return;
     e.preventDefault();
@@ -151,18 +204,18 @@ export default function ProductViewer({ config, color, modelUrl, fallbackImage, 
       role={show3d ? "img" : undefined}
       aria-label={alt}
     >
-      {/* radial floor glow */}
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_58%,rgba(255,255,255,0.09),transparent_62%)]" />
+      {/* soft studio floor glow */}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_60%,rgba(255,255,255,0.08),transparent_62%)]" />
 
       {showImage && fallbackImage && (
-        <div className={`absolute inset-0 flex items-center justify-center p-6 transition-opacity duration-700 ${show3d && !ready ? "opacity-40" : "opacity-100"}`}>
+        <div className={`absolute inset-0 flex items-center justify-center p-6 transition-opacity duration-700 ${show3d && !ready ? "opacity-30" : "opacity-100"}`}>
           <Image
             src={fallbackImage.url}
             alt={alt}
             width={fallbackImage.width ?? 1200}
             height={fallbackImage.height ?? 1200}
             sizes="(max-width: 1024px) 90vw, 50vw"
-            className="h-full w-auto max-w-full object-contain"
+            className="h-full w-auto max-w-full rounded-3xl object-contain"
             priority
           />
         </div>
@@ -195,22 +248,44 @@ export default function ProductViewer({ config, color, modelUrl, fallbackImage, 
       )}
 
       {show3d && ready && (
-        <div
-          className={`pointer-events-none absolute inset-x-0 bottom-4 flex justify-center transition-opacity duration-500 ${interacted ? "opacity-0" : "opacity-100"}`}
-        >
-          <span className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-4 py-2 text-xs text-white/70 backdrop-blur-md">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
-              <path d="M7 12a5 5 0 0 1 10 0M4 12a8 8 0 0 1 16 0" strokeLinecap="round" />
-              <path d="m17 9 3 3 3-3M7 9l-3 3-3-3" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            {labels.dragHint}
-          </span>
-        </div>
+        <>
+          <div className="absolute right-3 top-3 flex flex-col gap-2 sm:right-4 sm:top-4">
+            {[
+              { k: "in", label: labels.zoomIn ?? "+", f: 1.35, icon: "M12 6v12M6 12h12" },
+              { k: "out", label: labels.zoomOut ?? "−", f: 1 / 1.35, icon: "M6 12h12" },
+            ].map((b) => (
+              <button
+                key={b.k}
+                type="button"
+                aria-label={b.label}
+                title={b.label}
+                onClick={() => {
+                  zoomBy(stateRef.current, b.f);
+                  setInteracted(true);
+                }}
+                className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-black/45 text-white/80 backdrop-blur-md transition hover:border-white/30 hover:text-white"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                  <path d={b.icon} />
+                </svg>
+              </button>
+            ))}
+          </div>
+          <div
+            className={`pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-4 transition-opacity duration-500 ${interacted ? "opacity-0" : "opacity-100"}`}
+          >
+            <span className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-4 py-2 text-center text-xs text-white/70 backdrop-blur-md">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden>
+                <path d="M7 12a5 5 0 0 1 10 0M4 12a8 8 0 0 1 16 0" strokeLinecap="round" />
+                <path d="m17 9 3 3 3-3M7 9l-3 3-3-3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {labels.dragHint}
+            </span>
+          </div>
+        </>
       )}
 
-      {support === "none" && (
-        <p className="absolute inset-x-0 bottom-3 text-center text-xs text-white/45">{labels.fallback}</p>
-      )}
+      {support === "none" && <p className="absolute inset-x-0 bottom-3 text-center text-xs text-white/45">{labels.fallback}</p>}
     </div>
   );
 }

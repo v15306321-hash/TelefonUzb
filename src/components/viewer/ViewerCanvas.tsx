@@ -1,13 +1,12 @@
 "use client";
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { ContactShadows, useGLTF } from "@react-three/drei";
-import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { ContactShadows, Environment, Lightformer, useGLTF } from "@react-three/drei";
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, type MutableRefObject } from "react";
 import * as THREE from "three";
 import type { Model3DConfig } from "@/lib/types";
-import { DEVICE_DIMS, ProceduralDevice } from "./ProceduralDevice";
-import { defaultRotationOptions, step, type RotationState } from "./rotation";
+import { deviceSize, ProceduralDevice } from "./ProceduralDevice";
+import { applyZoomFocus, defaultRotationOptions, step, type RotationState } from "./rotation";
 
 export type ViewerCanvasProps = {
   config: Model3DConfig;
@@ -23,10 +22,11 @@ export type ViewerCanvasProps = {
 };
 
 const DRACO_PATH = "/draco/";
+const VIEW_FOV = 28;
 
 /** Studio pair composition (as on product photos): back view on the left, front view overlapping on the right. */
-function pairLayout(kind: Model3DConfig["kind"]) {
-  const d = DEVICE_DIMS[kind];
+function pairLayout(config: Model3DConfig) {
+  const d = deviceSize(config);
   const offset = d.w * 0.32;
   const span = Math.max(d.h, 2 * offset + d.w);
   const fov = 14;
@@ -34,24 +34,26 @@ function pairLayout(kind: Model3DConfig["kind"]) {
   return { offset, fov, distance };
 }
 
+/** Camera distance so the device fills ~78% of the viewer height. */
+function viewDistance(config: Model3DConfig) {
+  const { h } = deviceSize(config);
+  return h / 0.78 / 2 / Math.tan(THREE.MathUtils.degToRad(VIEW_FOV / 2));
+}
+
 export default function ViewerCanvas(props: ViewerCanvasProps) {
   const { active, studio } = props;
-  const height = DEVICE_DIMS[props.config.kind].h;
-  const pair = pairLayout(props.config.kind);
-  const camera =
-    studio === "pair"
-      ? { position: [0, 0, pair.distance] as [number, number, number], fov: pair.fov }
-      : { position: [0, 0, studio ? 3.9 : 4.15] as [number, number, number], fov: 30 };
+  const size = deviceSize(props.config);
+  const pair = pairLayout(props.config);
+  const baseDistance = studio === "pair" ? pair.distance : viewDistance(props.config) * (studio ? 1.05 : 1);
+  const mobile = typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
   return (
     <Canvas
       frameloop={active || studio ? "always" : "never"}
       dpr={studio ? 2 : [1, 2]}
-      shadows={!studio}
-      camera={{ ...camera, near: 0.1, far: 60 }}
+      camera={{ position: [0, 0, baseDistance], fov: studio === "pair" ? pair.fov : VIEW_FOV, near: 0.05, far: 60 }}
       gl={{ antialias: true, alpha: true, preserveDrawingBuffer: !!studio, powerPreference: "high-performance" }}
       onCreated={({ gl }) => {
-        // Khronos PBR Neutral: keeps product colours true to the swatches
-        gl.toneMapping = THREE.NeutralToneMapping;
+        gl.toneMapping = THREE.NeutralToneMapping; // Khronos PBR Neutral: true-to-swatch product colours
         gl.toneMappingExposure = 1;
         gl.setClearColor(0x000000, 0);
         gl.domElement.addEventListener("webglcontextlost", (e) => {
@@ -62,60 +64,61 @@ export default function ViewerCanvas(props: ViewerCanvasProps) {
       style={{ touchAction: "none" }}
       aria-hidden
     >
-      <StudioLights />
+      <StudioEnvironment resolution={mobile ? 256 : 512} />
       <Suspense key={props.modelUrl ?? "procedural"} fallback={null}>
         {studio === "pair" ? (
           <>
-            <group position={[-pair.offset, 0, -0.08]} rotation={[0, Math.PI, 0]}>
+            <group position={[-pair.offset, 0, -0.06]} rotation={[0, Math.PI, 0]}>
               <Model {...props} />
             </group>
-            <group position={[pair.offset, 0, 0.08]}>
+            <group position={[pair.offset, 0, 0.06]}>
               <Model {...props} />
             </group>
             <ReadySignal onReady={props.onReady} />
           </>
         ) : (
-          <Rig stateRef={props.stateRef} reducedMotion={props.reducedMotion} studio={studio}>
+          <Rig stateRef={props.stateRef} reducedMotion={props.reducedMotion} studio={studio} baseDistance={baseDistance} bounds={[size.w / 2, size.h / 2]}>
             <Model {...props} />
             <ReadySignal onReady={props.onReady} />
           </Rig>
         )}
       </Suspense>
       {!studio && (
-        <ContactShadows position={[0, -height / 2 - 0.16, 0]} opacity={0.6} scale={4} blur={2.4} far={1.4} resolution={512} color="#000000" />
+        <ContactShadows position={[0, -size.h / 2 - 0.12, 0]} opacity={0.55} scale={size.h * 2.6} blur={2.8} far={size.h} resolution={512} color="#000000" />
       )}
     </Canvas>
   );
 }
 
-/** Photographic studio lighting: PMREM-filtered room environment + soft key / rim lights. */
-function StudioLights() {
-  const { gl, scene } = useThree();
-  useLayoutEffect(() => {
-    const pmrem = new THREE.PMREMGenerator(gl);
-    const room = new RoomEnvironment();
-    const rt = pmrem.fromScene(room, 0.035);
-    scene.environment = rt.texture;
-    scene.environmentIntensity = 0.85;
-    return () => {
-      scene.environment = null;
-      rt.dispose();
-      pmrem.dispose();
-      room.traverse((o) => {
-        const m = o as THREE.Mesh;
-        if (m.isMesh) {
-          m.geometry.dispose();
-          (Array.isArray(m.material) ? m.material : [m.material]).forEach((mt) => mt.dispose());
-        }
-      });
-    };
-  }, [gl, scene]);
+/**
+ * Photographic studio: a dark room lit by large softboxes and vertical strip lights.
+ * Their reflections produce the long, soft highlights typical of professional product
+ * renders on glass and polished metal. Built procedurally — no HDR download needed.
+ */
+function StudioEnvironment({ resolution }: { resolution: number }) {
   return (
     <>
-      <ambientLight intensity={0.12} />
-      <directionalLight position={[-2.5, 3.5, 4]} intensity={1.1} />
-      <directionalLight position={[3, 1.5, -4]} intensity={0.8} color="#e9eeff" />
-      <directionalLight position={[2.5, -2, 3]} intensity={0.25} />
+      <ambientLight intensity={0.08} />
+      <directionalLight position={[-2, 3, 4]} intensity={0.9} />
+      <directionalLight position={[3, 1, -3]} intensity={0.5} color="#eef2ff" />
+      <Environment resolution={resolution} frames={1} environmentIntensity={1}>
+        <color attach="background" args={["#151518"]} />
+        {/* key: large overhead softbox, slightly in front */}
+        <Lightformer form="rect" intensity={2.2} position={[0, 5, 1.5]} rotation={[Math.PI / 2.2, 0, 0]} scale={[10, 5, 1]} />
+        {/* large side softboxes … */}
+        <Lightformer form="rect" intensity={1.1} position={[-5, 0.5, 1]} rotation={[0, Math.PI / 2.4, 0]} scale={[4, 9, 1]} />
+        <Lightformer form="rect" intensity={0.9} color="#f2f4ff" position={[5, 0.5, 1]} rotation={[0, -Math.PI / 2.4, 0]} scale={[4, 9, 1]} />
+        {/* … with bright vertical strips → long crisp highlights on the frame and glass */}
+        <Lightformer form="rect" intensity={6} position={[-3.4, 0.5, 2]} rotation={[0, Math.PI / 2.6, 0]} scale={[0.5, 8, 1]} />
+        <Lightformer form="rect" intensity={4.5} position={[3.4, 0.5, 2.2]} rotation={[0, -Math.PI / 2.6, 0]} scale={[0.4, 8, 1]} />
+        {/* front fill (behind the camera) */}
+        <Lightformer form="rect" intensity={0.8} position={[0, 0.5, 6]} rotation={[0, Math.PI, 0]} scale={[8, 4, 1]} />
+        {/* rim lights from behind */}
+        <Lightformer form="rect" intensity={2.4} position={[-2.6, 1.2, -4]} rotation={[0, Math.PI / 7, 0]} scale={[2, 8, 1]} />
+        <Lightformer form="rect" intensity={1.8} position={[2.8, -0.5, -4]} rotation={[0, -Math.PI / 7, 0]} scale={[2, 8, 1]} />
+        {/* floor bounce */}
+        <Lightformer form="rect" intensity={0.5} color="#e4e6ec" position={[0, -5, 0.5]} rotation={[-Math.PI / 2, 0, 0]} scale={[10, 6, 1]} />
+      </Environment>
     </>
   );
 }
@@ -124,14 +127,19 @@ function Rig({
   stateRef,
   reducedMotion,
   studio,
+  baseDistance,
+  bounds,
   children,
 }: {
   stateRef: MutableRefObject<RotationState>;
   reducedMotion?: boolean;
   studio?: ViewerCanvasProps["studio"];
+  baseDistance: number;
+  bounds?: [number, number];
   children: React.ReactNode;
 }) {
   const group = useRef<THREE.Group>(null);
+  const { camera } = useThree();
   useFrame((_, dt) => {
     const g = group.current;
     if (!g) return;
@@ -144,8 +152,17 @@ function Rig({
       return;
     }
     const s = stateRef.current;
+    const persp = camera as THREE.PerspectiveCamera;
+    const halfH = baseDistance * Math.tan(THREE.MathUtils.degToRad(persp.fov / 2));
+    applyZoomFocus(s, halfH, persp.aspect || 1, bounds?.[0] ?? 0.4, bounds?.[1] ?? 0.8);
     step(s, dt, defaultRotationOptions, reducedMotion);
-    g.rotation.set(s.x, s.y, 0, "YXZ");
+    g.quaternion.copy(s.q);
+    const z = baseDistance / s.zoom;
+    const p = camera.position;
+    if (Math.abs(p.z - z) > 1e-6 || Math.abs(p.x - s.pan.x) > 1e-6 || Math.abs(p.y - s.pan.y) > 1e-6) {
+      camera.position.set(s.pan.x, s.pan.y, z);
+      camera.lookAt(s.pan.x, s.pan.y, 0);
+    }
   });
   return <group ref={group}>{children}</group>;
 }
@@ -165,7 +182,7 @@ function ReadySignal({ onReady }: { onReady?: () => void }) {
 }
 
 function Model({ config, color, modelUrl }: ViewerCanvasProps) {
-  if (modelUrl) return <GLBModel url={modelUrl} targetHeight={DEVICE_DIMS[config.kind].h} />;
+  if (modelUrl) return <GLBModel url={modelUrl} targetHeight={deviceSize(config).h} />;
   return <ProceduralDevice config={config} color={color} />;
 }
 

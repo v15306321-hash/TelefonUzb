@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useRef, useState, useTransition } from "react";
 import { saveProductAction } from "@/app/admin/actions";
 import { normalize } from "@/lib/search";
-import { cameraLayouts, deviceKinds, frameFinishes, type ColorOption, type Model3DConfig, type SpecItem } from "@/lib/types";
+import { cameraLayouts, deviceKinds, devicePresets, frameFinishes, type ColorOption, type Model3DConfig, type SpecItem } from "@/lib/types";
 import ProductViewer from "@/components/viewer/ProductViewer";
 import RenderFromModel from "./RenderFromModel";
 import { Badge, Button, Card, Field, Input, Notice, Select, Textarea, Toggle } from "./ui";
@@ -44,6 +44,13 @@ const LAYOUT_LABELS: Record<Model3DConfig["layout"], string> = {
   "square-quad": "Квадратный блок 2×2 (Xiaomi / Redmi)",
   "round-module": "Круглый модуль (Xiaomi Ultra / OnePlus)",
   single: "Одна камера (планшеты)",
+};
+const PRESET_LABELS: Record<(typeof devicePresets)[number], string> = {
+  "iphone-11": "Apple iPhone 11",
+  "iphone-13": "Apple iPhone 13 / 13 mini / 14",
+  "iphone-13-pro": "Apple iPhone 13 Pro / 14 Pro",
+  "iphone-15": "Apple iPhone 15 / 16",
+  "iphone-17-pro": "Apple iPhone 17 Pro / Pro Max",
 };
 const KIND_LABELS: Record<Model3DConfig["kind"], string> = { phone: "Смартфон", tablet: "Планшет" };
 const FRAME_LABELS: Record<Model3DConfig["frame"], string> = { titanium: "Титан (матовый)", aluminium: "Алюминий", polished: "Полированная сталь" };
@@ -486,6 +493,17 @@ export default function ProductForm({
             </div>
 
             <div className={`mt-4 grid gap-3 ${v.model ? "opacity-50" : ""}`}>
+              <Field label="Модель корпуса" hint="Точная 3D-геометрия конкретной модели. «Универсальная» — по параметрам ниже.">
+                <Select
+                  value={v.model3d.preset ?? ""}
+                  onChange={(e) => set("model3d", { ...v.model3d, preset: (e.target.value || undefined) as Model3DConfig["preset"] })}
+                >
+                  <option value="">Универсальная</option>
+                  {devicePresets.map((k) => (
+                    <option key={k} value={k}>{PRESET_LABELS[k]}</option>
+                  ))}
+                </Select>
+              </Field>
               <Field label="Тип устройства">
                 <Select value={v.model3d.kind} onChange={(e) => set("model3d", { ...v.model3d, kind: e.target.value as Model3DConfig["kind"] })}>
                   {deviceKinds.map((k) => (

@@ -11,10 +11,9 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   images: {
-    formats: ["image/avif", "image/webp"],
-    deviceSizes: [640, 828, 1080, 1280, 1920],
-    imageSizes: [64, 96, 128, 256, 384],
-    minimumCacheTTL: 60 * 60 * 24 * 30,
+    // Uploaded images are already normalised to WebP ≤2000px at upload time, so they are
+    // served as-is: on-the-fly resizing (sharp) needs too much RAM on small instances.
+    unoptimized: true,
   },
   experimental: {
     serverActions: { bodySizeLimit: "2mb" },

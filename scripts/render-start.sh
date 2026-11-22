@@ -14,6 +14,9 @@ fi
 if [[ "$DB" != *"connect_timeout="* ]]; then DB="$DB&connect_timeout=30"; fi
 export DATABASE_URL="$DB"
 
+# keep the V8 heap well inside small (512 MB) instances
+export NODE_OPTIONS="${NODE_OPTIONS:-} --max-old-space-size=${NODE_MAX_OLD_SPACE_MB:-320}"
+
 node scripts/db-check.mjs || true
 
 node scripts/migrate.mjs

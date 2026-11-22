@@ -1,692 +1,625 @@
 "use client";
 
 /**
- * Real-time procedural 3D smartphone / tablet model (three.js geometry + physically based materials).
- * Used when a product has no uploaded GLB/GLTF model. Proportions, camera-module layout,
- * frame finish and colour are configurable per product (Product.model3d).
+ * Physically based procedural 3D model of a smartphone / tablet built from a DeviceSpec
+ * (exact dimensions per model, see device-specs.ts).
  *
- * Detail level: rounded unibody frame with antenna lines, frosted back glass, raised glass
- * camera plateau, multi-element lenses with coated optics, flash, mic, capsule buttons,
- * USB-C port and speaker grilles, thin bezels, Dynamic Island / punch-hole and a
- * high-resolution sculpted wallpaper.
+ * Construction (like the real device):
+ *  - frame band swept along the continuous-corner outline with the model's edge profile
+ *    (flat / rounded / contoured), antenna lines, capsule buttons, mute switch, ports, speaker holes, screws;
+ *  - front cover glass slab with rounded edge, OLED panel (wallpaper, notch / Dynamic Island / punch-hole);
+ *  - back glass slab (glossy or frosted) or aluminium unibody with a glass panel;
+ *  - raised camera plateau; every lens is a lathed assembly (metal ring, black barrel,
+ *    retaining ring, coated optical element under a transmissive sapphire cover); flash, LiDAR, mic.
  */
 
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import type { Model3DConfig } from "@/lib/types";
+import { getDeviceSpec, MM, type DeviceSpec } from "./device-specs";
+import { bandProfile, capsuleButton, latheZ, squircleFlat, squircleSlab, sweptBand } from "./geometry";
 
-type Dims = { w: number; h: number; d: number; r: number };
+export { getDeviceSpec };
 
-/** Units: 1 = 100 mm (phone ≈ 78 × 162 × 8.4 mm). */
-export const DEVICE_DIMS: Record<Model3DConfig["kind"], Dims> = {
-  phone: { w: 0.78, h: 1.62, d: 0.084, r: 0.125 },
-  tablet: { w: 1.18, h: 1.66, d: 0.058, r: 0.09 },
-};
-
-/* ------------------------------------------------------------------ geometry helpers */
-
-function roundedRectShape(w: number, h: number, r: number) {
-  const s = new THREE.Shape();
-  const x = -w / 2;
-  const y = -h / 2;
-  // cubic corners approximate Apple-style "continuous" (squircle-like) curvature
-  const k = 0.62;
-  s.moveTo(x + r, y);
-  s.lineTo(x + w - r, y);
-  s.bezierCurveTo(x + w - r * (1 - k), y, x + w, y + r * (1 - k), x + w, y + r);
-  s.lineTo(x + w, y + h - r);
-  s.bezierCurveTo(x + w, y + h - r * (1 - k), x + w - r * (1 - k), y + h, x + w - r, y + h);
-  s.lineTo(x + r, y + h);
-  s.bezierCurveTo(x + r * (1 - k), y + h, x, y + h - r * (1 - k), x, y + h - r);
-  s.lineTo(x, y + r);
-  s.bezierCurveTo(x, y + r * (1 - k), x + r * (1 - k), y, x + r, y);
-  return s;
+/** Height of the device in scene units (used by the canvas for framing/shadows). */
+export function deviceSize(config: Model3DConfig) {
+  const s = getDeviceSpec(config);
+  return { w: s.w * MM, h: s.h * MM, d: s.d * MM };
 }
 
-/** Flat rounded rectangle with UVs normalised to its bounding box. */
-function flatRoundedRect(w: number, h: number, r: number, segments = 40) {
-  const g = new THREE.ShapeGeometry(roundedRectShape(w, h, r), segments);
-  const pos = g.attributes.position;
-  const uv = new Float32Array(pos.count * 2);
-  for (let i = 0; i < pos.count; i++) {
-    uv[i * 2] = pos.getX(i) / w + 0.5;
-    uv[i * 2 + 1] = pos.getY(i) / h + 0.5;
-  }
-  g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
-  return g;
-}
+/* ============================================================== colour helpers */
 
-function extrudedRoundedRect(w: number, h: number, r: number, depth: number, bevel: number, curveSegments = 48, bevelSegments = 10) {
-  const g = new THREE.ExtrudeGeometry(roundedRectShape(w - bevel * 2, h - bevel * 2, Math.max(0.001, r - bevel)), {
-    depth: Math.max(0.0005, depth - bevel * 2),
-    bevelEnabled: true,
-    bevelThickness: bevel,
-    bevelSize: bevel,
-    bevelSegments,
-    curveSegments,
-  });
-  g.translate(0, 0, -(depth - bevel * 2) / 2);
-  g.computeVertexNormals();
-  return g;
+function mix(a: THREE.Color | string, b: THREE.Color | string, t: number) {
+  return new THREE.Color(a).lerp(new THREE.Color(b), t);
 }
-
-function shade(hex: string, amount: number, satMul = 1) {
-  const c = new THREE.Color(hex);
+function hslOf(hex: string) {
   const hsl = { h: 0, s: 0, l: 0 };
-  c.getHSL(hsl);
-  c.setHSL(hsl.h, THREE.MathUtils.clamp(hsl.s * satMul, 0, 1), THREE.MathUtils.clamp(hsl.l + amount, 0, 1));
-  return c;
+  new THREE.Color(hex).getHSL(hsl);
+  return hsl;
+}
+function adjust(hex: string, dl: number, satMul = 1) {
+  const { h, s, l } = hslOf(hex);
+  return new THREE.Color().setHSL(h, THREE.MathUtils.clamp(s * satMul, 0, 1), THREE.MathUtils.clamp(l + dl, 0, 1));
 }
 
-/* ------------------------------------------------------------------ procedural textures */
+/* ============================================================== textures */
 
-function canvasTexture(canvas: HTMLCanvasElement, srgb = true) {
-  const tex = new THREE.CanvasTexture(canvas);
-  if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 8;
-  tex.generateMipmaps = true;
-  tex.minFilter = THREE.LinearMipmapLinearFilter;
-  return tex;
+function canvasTex(c: HTMLCanvasElement, srgb = true) {
+  const t = new THREE.CanvasTexture(c);
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
 }
 
-let lensTexCache: THREE.Texture | null = null;
-/** Camera lens face: coated glass, concentric optical elements, reflections. */
-function lensTexture() {
-  if (lensTexCache) return lensTexCache;
-  const S = 512;
-  const c = document.createElement("canvas");
-  c.width = c.height = S;
-  const g = c.getContext("2d")!;
-  const m = S / 2;
-  g.fillStyle = "#020203";
-  g.fillRect(0, 0, S, S);
-  // inner barrel shading
-  let grd = g.createRadialGradient(m, m, S * 0.05, m, m, S * 0.5);
-  grd.addColorStop(0, "#080a18");
-  grd.addColorStop(0.35, "#0b1026");
-  grd.addColorStop(0.62, "#07080f");
-  grd.addColorStop(1, "#000000");
-  g.fillStyle = grd;
-  g.beginPath();
-  g.arc(m, m, S * 0.5, 0, Math.PI * 2);
-  g.fill();
-  // anti-reflective coating sheen (violet / green)
-  grd = g.createRadialGradient(m * 0.86, m * 0.8, 0, m, m, S * 0.36);
-  grd.addColorStop(0, "rgba(120,100,230,0.32)");
-  grd.addColorStop(0.45, "rgba(50,70,170,0.14)");
-  grd.addColorStop(0.8, "rgba(40,180,140,0.12)");
-  grd.addColorStop(1, "rgba(0,0,0,0)");
-  g.fillStyle = grd;
-  g.beginPath();
-  g.arc(m, m, S * 0.36, 0, Math.PI * 2);
-  g.fill();
-  // optical element rings
-  for (const [r, a, lw] of [
-    [0.47, 0.22, 5],
-    [0.4, 0.1, 3],
-    [0.31, 0.16, 3],
-    [0.22, 0.12, 2],
-    [0.13, 0.2, 2],
-  ] as const) {
-    g.strokeStyle = `rgba(190,200,255,${a})`;
-    g.lineWidth = lw;
-    g.beginPath();
-    g.arc(m, m, S * r, 0, Math.PI * 2);
-    g.stroke();
+let grainCache: { rough: THREE.Texture; normal: THREE.Texture } | null = null;
+/** Fine frosted-glass micro texture (roughness + normal). */
+function frostedMaps() {
+  if (grainCache) return grainCache;
+  const S = 256;
+  const heights = new Float32Array(S * S);
+  for (let i = 0; i < heights.length; i++) heights[i] = Math.random();
+  // light blur for a less "digital" grain
+  const hb = new Float32Array(S * S);
+  for (let y = 0; y < S; y++)
+    for (let x = 0; x < S; x++) {
+      let acc = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) acc += heights[((y + dy + S) % S) * S + ((x + dx + S) % S)];
+      hb[y * S + x] = acc / 9;
+    }
+  const rc = document.createElement("canvas");
+  const nc = document.createElement("canvas");
+  rc.width = rc.height = nc.width = nc.height = S;
+  const rg = rc.getContext("2d")!;
+  const ng = nc.getContext("2d")!;
+  const ri = rg.createImageData(S, S);
+  const ni = ng.createImageData(S, S);
+  for (let y = 0; y < S; y++)
+    for (let x = 0; x < S; x++) {
+      const i = y * S + x;
+      const v = 170 + (hb[i] - 0.5) * 120;
+      ri.data[i * 4] = ri.data[i * 4 + 1] = ri.data[i * 4 + 2] = v;
+      ri.data[i * 4 + 3] = 255;
+      const dx = hb[y * S + ((x + 1) % S)] - hb[y * S + ((x - 1 + S) % S)];
+      const dy = hb[((y + 1) % S) * S + x] - hb[((y - 1 + S) % S) * S + x];
+      const n = new THREE.Vector3(-dx * 2, -dy * 2, 1).normalize();
+      ni.data[i * 4] = (n.x * 0.5 + 0.5) * 255;
+      ni.data[i * 4 + 1] = (n.y * 0.5 + 0.5) * 255;
+      ni.data[i * 4 + 2] = (n.z * 0.5 + 0.5) * 255;
+      ni.data[i * 4 + 3] = 255;
+    }
+  rg.putImageData(ri, 0, 0);
+  ng.putImageData(ni, 0, 0);
+  const rough = canvasTex(rc, false);
+  const normal = canvasTex(nc, false);
+  for (const t of [rough, normal]) {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(10, 20);
   }
-  // pupil
-  grd = g.createRadialGradient(m, m, 0, m, m, S * 0.1);
-  grd.addColorStop(0, "#000");
-  grd.addColorStop(1, "#090b18");
-  g.fillStyle = grd;
-  g.beginPath();
-  g.arc(m, m, S * 0.1, 0, Math.PI * 2);
-  g.fill();
-  // specular reflections
-  g.strokeStyle = "rgba(255,255,255,0.55)";
-  g.lineWidth = 10;
-  g.lineCap = "round";
-  g.beginPath();
-  g.arc(m, m, S * 0.38, Math.PI * 1.1, Math.PI * 1.38);
-  g.stroke();
-  g.strokeStyle = "rgba(255,255,255,0.18)";
-  g.lineWidth = 6;
-  g.beginPath();
-  g.arc(m, m, S * 0.26, Math.PI * 0.1, Math.PI * 0.35);
-  g.stroke();
-  g.fillStyle = "rgba(255,255,255,0.85)";
-  g.beginPath();
-  g.ellipse(m - S * 0.12, m - S * 0.14, S * 0.035, S * 0.022, -0.6, 0, Math.PI * 2);
-  g.fill();
-  lensTexCache = canvasTexture(c);
-  return lensTexCache;
+  grainCache = { rough, normal };
+  return grainCache;
 }
 
-let flashTexCache: THREE.Texture | null = null;
+let flashCache: THREE.Texture | null = null;
 function flashTexture() {
-  if (flashTexCache) return flashTexCache;
+  if (flashCache) return flashCache;
   const S = 256;
   const c = document.createElement("canvas");
   c.width = c.height = S;
   const g = c.getContext("2d")!;
   const m = S / 2;
-  const grd = g.createRadialGradient(m, m, 0, m, m, m);
-  grd.addColorStop(0, "#fdfcf6");
-  grd.addColorStop(0.55, "#ece8dc");
-  grd.addColorStop(1, "#b8b4a8");
+  const grd = g.createRadialGradient(m * 0.9, m * 0.85, 0, m, m, m);
+  grd.addColorStop(0, "#fffdf2");
+  grd.addColorStop(0.5, "#f0e7cc");
+  grd.addColorStop(1, "#b9ad8c");
   g.fillStyle = grd;
   g.fillRect(0, 0, S, S);
-  g.strokeStyle = "rgba(120,110,80,0.35)";
-  for (let r = 10; r < m; r += 9) {
-    g.lineWidth = 1.5;
+  g.strokeStyle = "rgba(140,120,80,0.35)";
+  g.lineWidth = 1.4;
+  for (let r = 8; r < m; r += 7) {
     g.beginPath();
     g.arc(m, m, r, 0, Math.PI * 2);
     g.stroke();
   }
-  flashTexCache = canvasTexture(c);
-  return flashTexCache;
+  flashCache = canvasTex(c);
+  return flashCache;
 }
 
-let grainTexCache: THREE.Texture | null = null;
-/** Fine noise used as roughness map → frosted / matte glass look. */
-function grainTexture() {
-  if (grainTexCache) return grainTexCache;
-  const S = 256;
-  const c = document.createElement("canvas");
-  c.width = c.height = S;
-  const g = c.getContext("2d")!;
-  const img = g.createImageData(S, S);
-  for (let i = 0; i < S * S; i++) {
-    const v = 150 + Math.random() * 70;
-    img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v;
-    img.data[i * 4 + 3] = 255;
-  }
-  g.putImageData(img, 0, 0);
-  const t = canvasTexture(c, false);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(6, 12);
-  grainTexCache = t;
-  return t;
-}
-
-/** Organic blob path (closed, smooth) around (cx, cy). */
-function blobPath(g: CanvasRenderingContext2D, cx: number, cy: number, r: number, seed: number) {
-  const n = 7;
+/** Organic shape used by the wallpaper. */
+function blob(g: CanvasRenderingContext2D, cx: number, cy: number, r: number, seed: number) {
+  const n = 9;
   const pts: [number, number][] = [];
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2 + seed;
-    const rr = r * (0.88 + 0.14 * Math.sin(seed * 3.1 + i * 1.7));
+    const rr = r * (0.9 + 0.12 * Math.sin(seed * 2.3 + i * 1.9));
     pts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]);
   }
   g.beginPath();
-  for (let i = 0; i < n; i++) {
-    const [x0, y0] = pts[i];
+  for (let i = 0; i <= n; i++) {
+    const [x0, y0] = pts[i % n];
     const [x1, y1] = pts[(i + 1) % n];
     const mx = (x0 + x1) / 2;
     const my = (y0 + y1) / 2;
     if (i === 0) g.moveTo(mx, my);
     else g.quadraticCurveTo(x0, y0, mx, my);
   }
-  const [x0, y0] = pts[0];
-  const [x1, y1] = pts[1];
-  g.quadraticCurveTo(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
   g.closePath();
 }
 
-const screenTexCache = new Map<string, THREE.Texture>();
-/** Cached wallpaper per colour/kind (shared between instances, e.g. the studio pair). */
-function screenTexture(color: string, kind: Model3DConfig["kind"], island: boolean) {
-  const key = `${color}|${kind}|${island}`;
-  let tex = screenTexCache.get(key);
-  if (!tex) {
-    tex = makeScreenTexture(color, kind, island);
-    screenTexCache.set(key, tex);
-    if (screenTexCache.size > 16) {
-      const [oldKey, old] = screenTexCache.entries().next().value!;
-      screenTexCache.delete(oldKey);
-      old.dispose();
-    }
-  }
-  return tex;
-}
+const wallpaperCache = new Map<string, THREE.Texture>();
+/** High-resolution wallpaper in the style of the device's launch wallpaper, with the screen cut-out. */
+function wallpaper(spec: DeviceSpec, color: string, screenW: number, screenH: number) {
+  const key = `${spec.id}|${color}`;
+  const hit = wallpaperCache.get(key);
+  if (hit) return hit;
+  const W = spec.kind === "tablet" ? 1400 : 1080;
+  const H = Math.round((W * screenH) / screenW);
+  const px = W / screenW; // pixels per mm
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const g = c.getContext("2d")!;
+  const { h: hue, s, l } = hslOf(color);
+  const H360 = Math.round(hue * 360);
+  const S = Math.round(Math.min(0.55, s * 0.85) * 100);
+  const light = l > 0.62;
 
-/** High-resolution lock-screen wallpaper: sculpted soft shapes tinted by the device colour. */
-function makeScreenTexture(color: string, kind: Model3DConfig["kind"], island: boolean) {
-  const W = kind === "tablet" ? 1400 : 1024;
-  const H = kind === "tablet" ? 2016 : 2200;
-  const canvas = document.createElement("canvas");
-  canvas.width = W;
-  canvas.height = H;
-  const g = canvas.getContext("2d")!;
-  const base = new THREE.Color(color);
-  const hsl = { h: 0, s: 0, l: 0 };
-  base.getHSL(hsl);
-  const hue = Math.round(hsl.h * 360);
-  const sat = Math.round(Math.min(0.55, hsl.s * 0.75) * 100);
-
-  g.fillStyle = `hsl(${hue}, ${Math.round(sat * 0.4)}%, 4%)`;
+  g.fillStyle = light ? `hsl(${H360}, ${Math.round(S * 0.25)}%, 96%)` : `hsl(${H360}, ${Math.round(S * 0.5)}%, 5%)`;
   g.fillRect(0, 0, W, H);
-
   const shapes: [number, number, number, number][] = [
-    // cx, cy (fractions), radius (fraction of W), seed
-    [0.98, 0.46, 0.62, 1.3],
-    [0.22, 0.13, 0.3, 4.1],
-    [-0.02, 0.47, 0.22, 2.2],
-    [0.62, 0.98, 0.7, 5.7],
+    [0.27, 0.12, 0.33, 1.1],
+    [1.05, 0.47, 0.6, 2.7],
+    [-0.04, 0.53, 0.24, 4.4],
+    [0.6, 1.02, 0.72, 5.2],
   ];
   for (const [fx, fy, fr, seed] of shapes) {
     const cx = fx * W;
     const cy = fy * H;
     const r = fr * W;
     g.save();
-    g.shadowColor = "rgba(0,0,0,0.85)";
-    g.shadowBlur = W * 0.08;
-    g.shadowOffsetX = W * 0.02;
-    g.shadowOffsetY = W * 0.03;
-    blobPath(g, cx, cy, r, seed);
-    // lit from the upper left
-    const grd = g.createRadialGradient(cx - r * 0.45, cy - r * 0.5, r * 0.05, cx, cy, r * 1.15);
-    grd.addColorStop(0, `hsl(${hue}, ${sat}%, 88%)`);
-    grd.addColorStop(0.35, `hsl(${hue}, ${sat}%, 62%)`);
-    grd.addColorStop(0.75, `hsl(${hue}, ${Math.round(sat * 0.9)}%, 24%)`);
-    grd.addColorStop(1, `hsl(${hue}, ${Math.round(sat * 0.6)}%, 9%)`);
+    g.shadowColor = light ? `hsla(${H360}, ${S}%, 30%, 0.45)` : "rgba(0,0,0,0.9)";
+    g.shadowBlur = W * 0.07;
+    g.shadowOffsetX = W * 0.025;
+    g.shadowOffsetY = W * 0.035;
+    blob(g, cx, cy, r, seed);
+    const grd = g.createRadialGradient(cx - r * 0.5, cy - r * 0.55, r * 0.05, cx, cy, r * 1.2);
+    if (light) {
+      grd.addColorStop(0, `hsl(${H360}, ${S}%, 98%)`);
+      grd.addColorStop(0.45, `hsl(${H360}, ${S}%, 86%)`);
+      grd.addColorStop(1, `hsl(${H360}, ${Math.round(S * 0.9)}%, 64%)`);
+    } else {
+      grd.addColorStop(0, `hsl(${H360}, ${S}%, 84%)`);
+      grd.addColorStop(0.4, `hsl(${H360}, ${S}%, 58%)`);
+      grd.addColorStop(0.8, `hsl(${H360}, ${Math.round(S * 0.9)}%, 22%)`);
+      grd.addColorStop(1, `hsl(${H360}, ${Math.round(S * 0.6)}%, 8%)`);
+    }
     g.fillStyle = grd;
     g.fill();
     g.restore();
   }
-  // film grain for a photographic feel
+  // photographic grain
   const img = g.getImageData(0, 0, W, H);
   for (let i = 0; i < img.data.length; i += 4) {
-    const n = (Math.random() - 0.5) * 10;
+    const n = (Math.random() - 0.5) * 9;
     img.data[i] += n;
     img.data[i + 1] += n;
     img.data[i + 2] += n;
   }
   g.putImageData(img, 0, 0);
 
-  // front camera
-  if (kind === "phone") {
-    g.fillStyle = "#000";
-    if (island) {
-      const pw = W * 0.3;
-      const ph = W * 0.088;
-      g.beginPath();
-      g.roundRect((W - pw) / 2, H * 0.016, pw, ph, ph / 2);
-      g.fill();
-      const lx = W / 2 + pw * 0.3;
-      const ly = H * 0.016 + ph / 2;
-      const lg = g.createRadialGradient(lx - 3, ly - 3, 0, lx, ly, ph * 0.26);
-      lg.addColorStop(0, "#3b4a8a");
-      lg.addColorStop(0.5, "#141a33");
-      lg.addColorStop(1, "#050507");
-      g.fillStyle = lg;
-      g.beginPath();
-      g.arc(lx, ly, ph * 0.24, 0, Math.PI * 2);
-      g.fill();
-    } else {
-      g.beginPath();
-      g.arc(W / 2, H * 0.03, W * 0.03, 0, Math.PI * 2);
-      g.fill();
-    }
+  // screen cut-out
+  const cw = (spec.screen.cutoutW ?? 0) * px;
+  const ch = (spec.screen.cutoutH ?? 0) * px;
+  g.fillStyle = "#000";
+  const lensDot = (x: number, y: number, r: number) => {
+    const lg = g.createRadialGradient(x - r * 0.3, y - r * 0.3, 0, x, y, r);
+    lg.addColorStop(0, "#3c4a86");
+    lg.addColorStop(0.5, "#131933");
+    lg.addColorStop(1, "#040406");
+    g.fillStyle = lg;
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fill();
+  };
+  if (spec.screen.cutout === "notch") {
+    const x0 = (W - cw) / 2;
+    const rr = 2.6 * px;
+    const ear = 1.2 * px;
+    g.beginPath();
+    g.moveTo(x0 - ear, 0);
+    g.quadraticCurveTo(x0, 0, x0, ear);
+    g.lineTo(x0, ch - rr);
+    g.quadraticCurveTo(x0, ch, x0 + rr, ch);
+    g.lineTo(x0 + cw - rr, ch);
+    g.quadraticCurveTo(x0 + cw, ch, x0 + cw, ch - rr);
+    g.lineTo(x0 + cw, ear);
+    g.quadraticCurveTo(x0 + cw, 0, x0 + cw + ear, 0);
+    g.closePath();
+    g.fill();
+    // earpiece slit + front camera
+    g.fillStyle = "#1c1d21";
+    g.beginPath();
+    g.roundRect(W / 2 - 4.5 * px, 1.1 * px, 9 * px, 0.9 * px, 0.45 * px);
+    g.fill();
+    lensDot(W / 2 + cw * 0.27, ch * 0.5, 1.1 * px);
+  } else if (spec.screen.cutout === "island") {
+    const top = 3.0 * px;
+    g.beginPath();
+    g.roundRect((W - cw) / 2, top, cw, ch, ch / 2);
+    g.fill();
+    lensDot(W / 2 + cw * 0.32, top + ch / 2, ch * 0.26);
+  } else if (spec.screen.cutout === "punch") {
+    g.beginPath();
+    g.arc(W / 2, 4 * px, 1.8 * px, 0, Math.PI * 2);
+    g.fill();
   }
-  return canvasTexture(canvas);
+  const tex = canvasTex(c);
+  wallpaperCache.set(key, tex);
+  if (wallpaperCache.size > 24) {
+    const [k, old] = wallpaperCache.entries().next().value!;
+    wallpaperCache.delete(k);
+    old.dispose();
+  }
+  return tex;
 }
 
-/* ------------------------------------------------------------------ camera module layouts */
+/* ============================================================== materials */
 
-type Lens = { x: number; y: number; r: number };
-type Small = { x: number; y: number; r: number; kind: "flash" | "mic" | "sensor" };
-type Plateau = { x: number; y: number; w: number; h: number; r: number; metal?: boolean };
-
-/** Camera module in "back view" coordinates (x to the right when looking at the back). */
-function cameraLayout(layout: Model3DConfig["layout"], dims: Dims) {
-  const top = dims.h / 2;
-  const left = -dims.w / 2;
-  const lenses: Lens[] = [];
-  const smalls: Small[] = [];
-  let plateau: Plateau | null = null;
-
-  switch (layout) {
-    case "pro-triangle": {
-      const s = dims.w * 0.47;
-      const cx = left + 0.035 + s / 2;
-      const cy = top - 0.035 - s / 2;
-      plateau = { x: cx, y: cy, w: s, h: s, r: s * 0.27 };
-      const lr = s * 0.215;
-      lenses.push({ x: cx - s * 0.225, y: cy + s * 0.225, r: lr }, { x: cx - s * 0.225, y: cy - s * 0.225, r: lr }, { x: cx + s * 0.235, y: cy, r: lr });
-      smalls.push({ x: cx + s * 0.25, y: cy + s * 0.3, r: s * 0.07, kind: "flash" }, { x: cx + s * 0.25, y: cy - s * 0.3, r: s * 0.06, kind: "sensor" }, { x: cx + s * 0.02, y: cy, r: s * 0.018, kind: "mic" });
-      break;
-    }
-    case "dual-diagonal": {
-      const s = dims.w * 0.4;
-      const cx = left + 0.04 + s / 2;
-      const cy = top - 0.04 - s / 2;
-      plateau = { x: cx, y: cy, w: s, h: s, r: s * 0.3 };
-      const lr = s * 0.215;
-      lenses.push({ x: cx - s * 0.2, y: cy + s * 0.2, r: lr }, { x: cx + s * 0.2, y: cy - s * 0.2, r: lr });
-      smalls.push({ x: cx + s * 0.24, y: cy + s * 0.24, r: s * 0.085, kind: "flash" }, { x: cx - s * 0.27, y: cy - s * 0.27, r: s * 0.025, kind: "mic" });
-      break;
-    }
-    case "dual-vertical": {
-      const s = dims.w * 0.42;
-      const cx = left + 0.04 + s / 2;
-      const cy = top - 0.04 - s / 2;
-      plateau = { x: cx, y: cy, w: s, h: s, r: s * 0.26 };
-      const lr = s * 0.2;
-      lenses.push({ x: cx - s * 0.2, y: cy + s * 0.22, r: lr }, { x: cx - s * 0.2, y: cy - s * 0.22, r: lr });
-      smalls.push({ x: cx + s * 0.22, y: cy - s * 0.04, r: s * 0.075, kind: "flash" }, { x: cx + s * 0.22, y: cy + s * 0.25, r: s * 0.03, kind: "mic" });
-      break;
-    }
-    case "vertical-trio": {
-      const lr = dims.w * 0.088;
-      const x = left + 0.135;
-      for (let i = 0; i < 3; i++) lenses.push({ x, y: top - 0.165 - i * lr * 2.5, r: lr });
-      smalls.push({ x: x + lr * 2.1, y: top - 0.165, r: lr * 0.34, kind: "flash" }, { x: x + lr * 2.1, y: top - 0.165 - lr * 1.25, r: lr * 0.22, kind: "sensor" });
-      break;
-    }
-    case "horizontal-bar": {
-      const bh = dims.h * 0.13;
-      const cy = top - 0.24;
-      plateau = { x: 0, y: cy, w: dims.w + 0.006, h: bh, r: bh * 0.48, metal: true };
-      const lr = bh * 0.3;
-      lenses.push({ x: -dims.w * 0.28, y: cy, r: lr }, { x: -dims.w * 0.12, y: cy, r: lr }, { x: dims.w * 0.04, y: cy, r: lr });
-      smalls.push({ x: dims.w * 0.2, y: cy, r: lr * 0.38, kind: "flash" });
-      break;
-    }
-    case "square-quad": {
-      const s = dims.w * 0.5;
-      const cx = left + 0.05 + s / 2;
-      const cy = top - 0.05 - s / 2;
-      plateau = { x: cx, y: cy, w: s, h: s, r: s * 0.24 };
-      const lr = s * 0.19;
-      for (const [dx, dy] of [[-1, 1], [1, 1], [-1, -1]] as const) lenses.push({ x: cx + dx * s * 0.22, y: cy + dy * s * 0.22, r: lr });
-      smalls.push({ x: cx + s * 0.22, y: cy - s * 0.22, r: s * 0.08, kind: "flash" });
-      break;
-    }
-    case "round-module": {
-      const R = dims.w * 0.3;
-      const cy = top - 0.07 - R;
-      plateau = { x: 0, y: cy, w: R * 2, h: R * 2, r: R };
-      const lr = R * 0.33;
-      for (const [dx, dy] of [[-1, 1], [1, 1], [-1, -1], [1, -1]] as const) lenses.push({ x: dx * R * 0.42, y: cy + dy * R * 0.42, r: lr });
-      smalls.push({ x: R * 1.25, y: cy + R * 0.6, r: R * 0.1, kind: "flash" });
-      break;
-    }
-    case "single":
-    default: {
-      const lr = dims.w * 0.055;
-      lenses.push({ x: left + 0.1, y: top - 0.1, r: lr });
-      smalls.push({ x: left + 0.1, y: top - 0.1 - lr * 2.3, r: lr * 0.35, kind: "flash" }, { x: left + 0.1 + lr * 2, y: top - 0.1, r: lr * 0.15, kind: "mic" });
-    }
-  }
-  return { lenses, smalls, plateau };
-}
-
-/* ------------------------------------------------------------------ component */
-
-export function ProceduralDevice({ config, color }: { config: Model3DConfig; color: string }) {
-  const dims = DEVICE_DIMS[config.kind];
-  const isApple = config.layout === "pro-triangle" || config.layout === "dual-diagonal" || config.layout === "dual-vertical";
-
-  const geo = useMemo(() => {
-    const { w, h, d, r } = dims;
-    const bevel = Math.min(d * 0.3, 0.024);
-    const bezel = config.kind === "tablet" ? 0.04 : 0.024;
-    return {
-      body: extrudedRoundedRect(w, h, r, d, bevel),
-      back: flatRoundedRect(w - 0.014, h - 0.014, r - 0.007, 64),
-      frontGlass: flatRoundedRect(w - 0.01, h - 0.01, r - 0.005, 64),
-      screen: flatRoundedRect(w - bezel * 2, h - bezel * 2, r - bezel * 0.9, 64),
-      port: flatRoundedRect(0.088, Math.min(0.03, d * 0.36), 0.015),
-      hole: new THREE.CircleGeometry(1, 20),
-      lensFace: new THREE.CircleGeometry(1, 64),
-      ring: new THREE.CylinderGeometry(1, 1, 1, 64, 1, true),
-      ringCap: new THREE.RingGeometry(0.8, 1, 64),
-      capsule: new THREE.CapsuleGeometry(0.5, 1, 8, 16),
-    };
-  }, [dims, config.kind]);
-
-  const cam = useMemo(() => cameraLayout(config.layout, dims), [config.layout, dims]);
-
-  const mats = useMemo(() => {
-    const body = new THREE.Color(color);
-    const titanium = config.frame === "titanium";
-    const polished = config.frame === "polished";
-    // anodised aluminium frames follow the body colour; titanium/steel are more neutral
-    const frameColor = titanium
-      ? shade(color, 0.04, 0.5).lerp(new THREE.Color("#8e8b86"), 0.45)
-      : polished
-        ? shade(color, 0.06, 0.8).lerp(new THREE.Color("#c4c4c8"), 0.35)
-        : shade(color, 0.02, 1.05).lerp(new THREE.Color("#9a9a9e"), 0.12);
-    const grain = grainTexture();
+function useMaterials(spec: DeviceSpec, color: string) {
+  return useMemo(() => {
+    const frameColor =
+      spec.frame === "steel"
+        ? mix(adjust(color, 0.02, 0.9), "#d9d9dc", 0.42)
+        : spec.frame === "titanium"
+          ? mix(adjust(color, 0.03, 0.6), "#8e8b87", 0.5)
+          : mix(adjust(color, -0.02, 1.15), "#b9b9bd", 0.12);
     const frame = new THREE.MeshPhysicalMaterial({
       color: frameColor,
       metalness: 1,
-      roughness: titanium ? 0.34 : polished ? 0.1 : 0.27,
-      anisotropy: titanium ? 0.6 : 0.25,
-      clearcoat: polished ? 0.8 : 0,
-      clearcoatRoughness: 0.15,
+      roughness: spec.frame === "steel" ? 0.07 : spec.frame === "titanium" ? 0.33 : 0.27,
+      anisotropy: spec.frame === "steel" ? 0 : spec.frame === "titanium" ? 0.75 : 0.35,
+      envMapIntensity: 1.1,
     });
-    const back = new THREE.MeshPhysicalMaterial({
-      color: body,
+    const frost = frostedMaps();
+    const back =
+      spec.back === "gloss"
+        ? new THREE.MeshPhysicalMaterial({ color, metalness: 0, roughness: 0.16, clearcoat: 1, clearcoatRoughness: 0.025, ior: 1.5 })
+        : new THREE.MeshPhysicalMaterial({
+            color,
+            metalness: 0,
+            roughness: 0.6,
+            roughnessMap: frost.rough,
+            normalMap: frost.normal,
+            normalScale: new THREE.Vector2(0.22, 0.22),
+            clearcoat: 0.12,
+            clearcoatRoughness: 0.55,
+            sheen: 0.25,
+            sheenRoughness: 0.7,
+            sheenColor: adjust(color, 0.2),
+          });
+    const plateauGlass = new THREE.MeshPhysicalMaterial({
+      color: adjust(color, spec.back === "gloss" ? -0.01 : -0.035, 1.12),
       metalness: 0,
-      roughness: 0.5,
-      roughnessMap: grain,
-      clearcoat: 0.55,
-      clearcoatRoughness: 0.42,
-      sheen: 0.5,
-      sheenRoughness: 0.6,
-      sheenColor: shade(color, 0.25),
-      ior: 1.52,
-    });
-    const plateau = new THREE.MeshPhysicalMaterial({
-      color: shade(color, -0.03, 1.15),
-      metalness: 0,
-      roughness: 0.08,
+      roughness: 0.07,
       clearcoat: 1,
-      clearcoatRoughness: 0.04,
-      ior: 1.6,
+      clearcoatRoughness: 0.02,
+      ior: 1.55,
     });
-    const ring = new THREE.MeshPhysicalMaterial({ color: shade(color, -0.02, 1.1).lerp(frameColor, 0.5), metalness: 1, roughness: 0.2 });
-    const ringInner = new THREE.MeshStandardMaterial({ color: "#060607", metalness: 0.4, roughness: 0.5, side: THREE.DoubleSide });
-    const lens = new THREE.MeshPhysicalMaterial({
-      color: "#ffffff",
-      map: lensTexture(),
-      metalness: 0,
-      roughness: 0.05,
+    const darkGlass = new THREE.MeshPhysicalMaterial({ color: "#0a0a0c", roughness: 0.1, clearcoat: 1, clearcoatRoughness: 0.03 });
+    const ring = new THREE.MeshPhysicalMaterial({
+      color: spec.frame === "steel" ? frameColor : mix(adjust(color, -0.04, 1.2), frameColor, 0.4),
+      metalness: 1,
+      roughness: spec.frame === "steel" ? 0.1 : 0.2,
+      side: THREE.DoubleSide,
+    });
+    const barrel = new THREE.MeshStandardMaterial({ color: "#050506", roughness: 0.55, metalness: 0.2, side: THREE.DoubleSide });
+    const retainer = new THREE.MeshStandardMaterial({ color: "#30333b", roughness: 0.28, metalness: 1, side: THREE.DoubleSide });
+    const element = new THREE.MeshPhysicalMaterial({
+      color: "#0c1230",
+      metalness: 0.35,
+      roughness: 0.04,
       clearcoat: 1,
       clearcoatRoughness: 0.01,
-      iridescence: 0.6,
-      iridescenceIOR: 1.7,
-      iridescenceThicknessRange: [200, 480],
-      envMapIntensity: 0.7,
+      iridescence: 1,
+      iridescenceIOR: 1.75,
+      iridescenceThicknessRange: [220, 520],
     });
-    const flash = new THREE.MeshPhysicalMaterial({ color: "#ffffff", map: flashTexture(), roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.05 });
-    const dark = new THREE.MeshStandardMaterial({ color: "#050506", roughness: 0.6, metalness: 0.2 });
-    const sensor = new THREE.MeshPhysicalMaterial({ color: "#0b0c10", roughness: 0.15, clearcoat: 1 });
-    const antenna = new THREE.MeshStandardMaterial({ color: shade(color, 0.08, 0.6), roughness: 0.65, metalness: 0 });
-    const frontGlass = new THREE.MeshPhysicalMaterial({ color: "#000000", roughness: 0.1, metalness: 0, specularIntensity: 0.45 });
-    const barWindow = new THREE.MeshPhysicalMaterial({ color: "#050506", roughness: 0.05, clearcoat: 1 });
-    return { frame, back, plateau, ring, ringInner, lens, flash, dark, sensor, antenna, frontGlass, barWindow };
-  }, [color, config.frame]);
+    const sapphire = new THREE.MeshPhysicalMaterial({
+      color: "#ffffff",
+      metalness: 0,
+      roughness: 0.02,
+      transmission: 1,
+      thickness: 0.003,
+      ior: 1.77,
+      specularIntensity: 1,
+      envMapIntensity: 1.2,
+    });
+    const flash = new THREE.MeshPhysicalMaterial({ color: "#ffffff", map: flashTexture(), roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.04 });
+    const black = new THREE.MeshStandardMaterial({ color: "#030304", roughness: 0.7, metalness: 0 });
+    const lidar = new THREE.MeshPhysicalMaterial({ color: "#060608", roughness: 0.12, clearcoat: 1, clearcoatRoughness: 0.02 });
+    const core = new THREE.MeshStandardMaterial({ color: "#0b0b0c", roughness: 0.8 });
+    const antenna = new THREE.MeshStandardMaterial({ color: mix(adjust(color, 0.05, 0.5), "#9a9a9e", 0.3), roughness: 0.6, metalness: 0 });
+    const frontGlass = new THREE.MeshPhysicalMaterial({ color: "#000000", roughness: 0.05, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.02, specularIntensity: 0.6 });
+    const screenGlass = new THREE.MeshPhysicalMaterial({
+      color: "#000000",
+      roughness: 0.03,
+      metalness: 0,
+      specularIntensity: 0.4,
+      clearcoat: 0.3,
+      clearcoatRoughness: 0.02,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const screw = new THREE.MeshStandardMaterial({ color: mix(frameColor, "#777", 0.3), roughness: 0.35, metalness: 1 });
+    return { frame, back, plateauGlass, darkGlass, ring, barrel, retainer, element, sapphire, flash, black, lidar, core, antenna, frontGlass, screenGlass, screw };
+  }, [spec, color]);
+}
 
-  const screenMat = useMemo(() => {
-    // the display is self-lit: an unlit material keeps the wallpaper deep and vivid
-    return new THREE.MeshBasicMaterial({ map: screenTexture(color, config.kind, isApple), toneMapped: false });
-  }, [color, config.kind, isApple]);
+/* ============================================================== component */
 
-  // glass over the display: only adds reflections (additive), never washes out the picture
-  const screenGlass = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: "#000000",
-        roughness: 0.03,
-        metalness: 0,
-        specularIntensity: 0.35,
-        clearcoat: 0.25,
-        clearcoatRoughness: 0.02,
-        transparent: true,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      }),
-    [],
+export function ProceduralDevice({ config, color }: { config: Model3DConfig; color: string }) {
+  const spec = useMemo(() => getDeviceSpec(config), [config]);
+  const mats = useMaterials(spec, color);
+
+  const layout = useMemo(() => {
+    const { w, h, d, r } = spec;
+    const flat = spec.band === "flat";
+    const topGap = flat ? 0.32 : 0.86;
+    const glassInset = flat ? 0.8 : spec.band === "rounded" ? 0.85 : 0.45;
+    const glassEdge = flat ? 0.32 : 0.55;
+    const glassT = 0.9;
+    const lip = Math.max(spec.edgeRadius + 0.35, 1.1);
+    const screenMargin = Math.max(spec.screen.bezel, glassInset + 0.7);
+    const sw = w - screenMargin * 2;
+    const sh = h - screenMargin * 2;
+    return { w, h, d, r, topGap, glassInset, glassEdge, glassT, lip, screenMargin, sw, sh };
+  }, [spec]);
+
+  const geo = useMemo(() => {
+    const { w, h, d, r, topGap, glassInset, glassEdge, glassT, lip, screenMargin, sw, sh } = layout;
+    const gw = w - glassInset * 2;
+    const gh = h - glassInset * 2;
+    const gr = Math.max(1, r - glassInset);
+    const geoms: Record<string, THREE.BufferGeometry> = {
+      band: sweptBand(w, h, r, bandProfile(d, spec.edgeRadius, spec.band, lip, topGap)),
+      core: squircleSlab(w - lip * 2 + 0.6, h - lip * 2 + 0.6, Math.max(1, r - lip), d - 1.2, 0.2),
+      glass: squircleSlab(gw, gh, gr, glassT, glassEdge),
+      screen: squircleFlat(sw, sh, Math.max(1, r - screenMargin + 0.4)),
+      hole: new THREE.CircleGeometry(MM, 24),
+    };
+    if (spec.unibody) {
+      const pw = w - 9;
+      const ph = h - spec.unibody.panelTop - 4.5;
+      geoms.panel = squircleSlab(pw, ph, Math.max(2, r - 4.5), 0.22, 0.1);
+    }
+    const pl = spec.camera.plateau;
+    if (pl) geoms.plateau = squircleSlab(pl.w, pl.h, pl.r, pl.depth, Math.min(0.55, pl.depth / 2.2), 24);
+    return geoms;
+  }, [layout, spec]);
+
+  useEffect(() => () => Object.values(geo).forEach((g) => g.dispose()), [geo]);
+  useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
+
+  const screenMat = useMemo(
+    () => new THREE.MeshBasicMaterial({ map: wallpaper(spec, color, layout.sw, layout.sh), toneMapped: false }),
+    [spec, color, layout.sw, layout.sh],
   );
+  useEffect(() => () => screenMat.dispose(), [screenMat]);
 
-  useEffect(() => () => screenGlass.dispose(), [screenGlass]);
-  useEffect(
-    () => () => {
-      Object.values(geo).forEach((g) => g.dispose());
-    },
-    [geo],
-  );
-  useEffect(
-    () => () => {
-      Object.values(mats).forEach((m) => m.dispose());
-    },
-    [mats],
-  );
-  useEffect(
-    () => () => {
-      screenMat.dispose(); // texture is cached & shared
-    },
-    [screenMat],
-  );
-
-  const { w, h, d } = dims;
-  const zBack = -d / 2 - 0.0004;
-  const zFront = d / 2 + 0.0004;
-  const plateauDepth = cam.plateau ? (cam.plateau.metal ? 0.028 : 0.014) : 0;
-
-  /** capsule-shaped side button; length along Y */
-  const button = (key: string, side: 1 | -1, y: number, len: number) => (
-    <mesh
-      key={key}
-      geometry={geo.capsule}
-      material={mats.frame}
-      position={[side * (w / 2 - 0.002), y, 0]}
-      scale={[0.016, len / 2, d * 0.38]}
-      castShadow
-    />
-  );
-
-  /** antenna band: thin non-metal strip across the side of the frame */
-  const antennaBand = (key: string, x: number, y: number, horizontal = false) => (
-    <mesh key={key} material={mats.antenna} position={[x, y, 0]}>
-      <boxGeometry args={horizontal ? [0.006, 0.0025, d * 0.6] : [0.0025, 0.006, d * 0.6]} />
-    </mesh>
-  );
-
-  const bottomY = -h / 2 - 0.0004;
-  const speakerHoles = useMemo(() => {
-    const holes: number[] = [];
-    for (let i = 0; i < 6; i++) holes.push(0.1 + i * 0.019);
-    return holes;
-  }, []);
+  const { w, h, d, glassT } = layout;
+  const cam = spec.camera;
+  /** back-view mm (from top-left) → back group local scene units */
+  const bx = (x: number) => (-w / 2 + x) * MM;
+  const by = (y: number) => (h / 2 - y) * MM;
+  const mountZ = cam.plateau ? cam.plateau.depth : 0;
+  const plateauMat = cam.plateau?.material === "frame" ? mats.frame : cam.plateau?.material === "dark" ? mats.darkGlass : mats.plateauGlass;
 
   return (
     <group>
-      {/* unibody frame */}
-      <mesh geometry={geo.body} material={mats.frame} castShadow receiveShadow />
+      {/* ---------- frame band + internal core ---------- */}
+      <mesh geometry={geo.band} material={mats.frame} castShadow receiveShadow />
+      <mesh geometry={geo.core} material={mats.core} position={[0, 0, -(d - 1.2) * 0.5 * MM]} />
 
-      {/* antenna lines */}
-      {antennaBand("a1", w / 2 + 0.0006, h / 2 - 0.13)}
-      {antennaBand("a2", -w / 2 - 0.0006, h / 2 - 0.13)}
-      {antennaBand("a3", w / 2 + 0.0006, -h / 2 + 0.13)}
-      {antennaBand("a4", -w / 2 - 0.0006, -h / 2 + 0.13)}
+      {/* antenna lines on the band */}
+      {spec.antennas &&
+        [
+          [w / 2, h / 2 - 15, 0],
+          [-w / 2, h / 2 - 15, 0],
+          [w / 2, -h / 2 + 15, 0],
+          [-w / 2, -h / 2 + 15, 0],
+        ].map(([x, y], i) => (
+          <mesh key={`ant${i}`} material={mats.antenna} position={[x * MM, y * MM, 0]}>
+            <boxGeometry args={[0.24 * MM, 0.9 * MM, (d - 2.2) * MM]} />
+          </mesh>
+        ))}
+      {spec.antennas &&
+        [-1, 1].map((sx) => (
+          <mesh key={`antb${sx}`} material={mats.antenna} position={[sx * (w / 2 - 12) * MM, (-h / 2) * MM, 0]}>
+            <boxGeometry args={[0.9 * MM, 0.24 * MM, (d - 2.2) * MM]} />
+          </mesh>
+        ))}
 
-      {/* front: black glass, display, reflective cover */}
-      <mesh geometry={geo.frontGlass} material={mats.frontGlass} position={[0, 0, zFront]} />
-      <mesh geometry={geo.screen} material={screenMat} position={[0, 0, zFront + 0.0004]} />
-      <mesh geometry={geo.frontGlass} material={screenGlass} position={[0, 0, zFront + 0.0008]} />
+      {/* ---------- front: cover glass, OLED panel, reflections ---------- */}
+      <group position={[0, 0, (d / 2 - glassT) * MM]}>
+        <mesh geometry={geo.glass} material={mats.frontGlass} />
+        <mesh geometry={geo.screen} material={screenMat} position={[0, 0, glassT * MM + 0.0001]} />
+        <mesh geometry={geo.screen} material={mats.screenGlass} position={[0, 0, glassT * MM + 0.0002]} />
+      </group>
 
-      {/* back glass (rotated to face -Z); children use back-view coordinates */}
-      <group position={[0, 0, zBack]} rotation={[0, Math.PI, 0]}>
-        <mesh geometry={geo.back} material={mats.back} receiveShadow />
+      {/* ---------- back (rotated to face -Z), back-view coordinates ---------- */}
+      <group position={[0, 0, (-d / 2) * MM]} rotation={[0, Math.PI, 0]}>
+        <mesh geometry={geo.glass} material={spec.unibody ? mats.frame : mats.back} position={[0, 0, -glassT * MM]} receiveShadow />
+        {spec.unibody && geo.panel && (
+          <mesh geometry={geo.panel} material={mats.back} position={[0, by((spec.unibody.panelTop + h - 4.5) / 2), -0.06 * MM]} />
+        )}
+
         {cam.plateau && (
-          <PlateauMesh
-            p={cam.plateau}
-            depth={plateauDepth}
-            material={cam.plateau.metal ? mats.frame : mats.plateau}
-            windowMat={cam.plateau.metal ? mats.barWindow : null}
+          <mesh
+            geometry={geo.plateau}
+            material={plateauMat}
+            position={[bx(cam.plateau.x + cam.plateau.w / 2), by(cam.plateau.y + cam.plateau.h / 2), -0.02 * MM]}
+            castShadow
+            receiveShadow
           />
         )}
-        {cam.lenses.map((l, i) => {
-          const ringH = 0.026;
-          return (
-            <group key={i} position={[l.x, l.y, plateauDepth]}>
-              {/* protruding metal ring */}
-              <mesh geometry={geo.ring} material={mats.ring} rotation={[Math.PI / 2, 0, 0]} position={[0, 0, ringH / 2]} scale={[l.r, ringH, l.r]} castShadow />
-              <mesh geometry={geo.ringCap} material={mats.ring} position={[0, 0, ringH]} scale={[l.r, l.r, 1]} />
-              {/* dark inner wall */}
-              <mesh geometry={geo.ring} material={mats.ringInner} rotation={[Math.PI / 2, 0, 0]} position={[0, 0, ringH - 0.006]} scale={[l.r * 0.8, 0.012, l.r * 0.8]} />
-              {/* coated optics under sapphire */}
-              <mesh geometry={geo.lensFace} material={mats.lens} position={[0, 0, ringH - 0.0035]} scale={[l.r * 0.8, l.r * 0.8, 1]} />
-            </group>
-          );
-        })}
-        {cam.smalls.map((s, i) => (
+
+        {cam.lenses.map((l, i) => (
+          <Lens key={i} x={bx(l.x)} y={by(l.y)} z={mountZ * MM} d={l.d} ringH={cam.ringHeight} ringWidth={cam.ringWidth} mats={mats} />
+        ))}
+
+        {cam.flash && <Flash x={bx(cam.flash.x)} y={by(cam.flash.y)} z={mountZ * MM} d={cam.flash.d} mats={mats} />}
+        {cam.lidar && (
           <mesh
-            key={i}
-            geometry={geo.hole}
-            material={s.kind === "flash" ? mats.flash : s.kind === "sensor" ? mats.sensor : mats.dark}
-            position={[s.x, s.y, plateauDepth + 0.0008]}
-            scale={[s.r, s.r, 1]}
-          />
-        ))}
+            material={mats.lidar}
+            position={[bx(cam.lidar.x), by(cam.lidar.y), mountZ * MM]}
+            rotation={[Math.PI / 2, 0, 0]}
+            scale={[(cam.lidar.d / 2) * MM, 0.3 * MM, (cam.lidar.d / 2) * MM]}
+          >
+            <sphereGeometry args={[1, 40, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
+          </mesh>
+        )}
+        {cam.mic && (
+          <mesh geometry={geo.hole} material={mats.black} position={[bx(cam.mic.x), by(cam.mic.y), mountZ * MM + 0.00002]} scale={[cam.mic.d / 2, cam.mic.d / 2, 1]} />
+        )}
       </group>
 
-      {/* side buttons: power on the right, volume (+ action) on the left in front view */}
-      {button("power", 1, h * 0.14, h * 0.12)}
-      {config.kind === "phone" && button("action", -1, h * 0.3, h * 0.04)}
-      {config.kind === "phone" && button("vol-up", -1, h * 0.2, h * 0.075)}
-      {config.kind === "phone" && button("vol-down", -1, h * 0.1, h * 0.075)}
-      {config.kind === "tablet" && button("vol", 1, h * 0.34, h * 0.06)}
+      {/* ---------- side buttons (front view: +x is the right side) ---------- */}
+      {spec.right.map((b, i) => (
+        <SideButton key={`r${i}`} side={1} spec={spec} b={b} mats={mats} />
+      ))}
+      {spec.left.map((b, i) => (
+        <SideButton key={`l${i}`} side={-1} spec={spec} b={b} mats={mats} />
+      ))}
 
-      {/* bottom edge: USB-C port and speaker / microphone grilles */}
-      <group position={[0, bottomY, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <mesh geometry={geo.port} material={mats.dark} />
-        {speakerHoles.map((x) => (
-          <mesh key={`r${x}`} geometry={geo.hole} material={mats.dark} position={[x, 0, 0]} scale={[0.0055, 0.0055, 1]} />
-        ))}
-        {config.kind === "phone" &&
-          speakerHoles.slice(0, 4).map((x) => <mesh key={`l${x}`} geometry={geo.hole} material={mats.dark} position={[-x, 0, 0]} scale={[0.0055, 0.0055, 1]} />)}
-      </group>
+      {/* ---------- bottom edge: port, speaker & mic grilles, screws ---------- */}
+      <BottomDetails spec={spec} mats={mats} />
     </group>
   );
 }
 
-function PlateauMesh({
-  p,
-  depth,
-  material,
-  windowMat,
-}: {
-  p: Plateau;
-  depth: number;
-  material: THREE.Material;
-  windowMat: THREE.Material | null;
-}) {
-  const geom = useMemo(() => {
-    const bevel = Math.min(depth * 0.48, 0.0065);
-    const g = new THREE.ExtrudeGeometry(roundedRectShape(p.w - bevel * 2, p.h - bevel * 2, Math.max(0.001, p.r - bevel)), {
-      depth: Math.max(0.0005, depth - bevel),
-      bevelEnabled: true,
-      bevelThickness: bevel,
-      bevelSize: bevel,
-      bevelSegments: 6,
-      curveSegments: 40,
-    });
-    g.translate(0, 0, -0.001);
-    g.computeVertexNormals();
-    return g;
-  }, [p.w, p.h, p.r, depth]);
-  const win = useMemo(() => (windowMat ? flatRoundedRect(p.w * 0.62, p.h * 0.72, p.h * 0.34) : null), [windowMat, p.w, p.h]);
-  useEffect(() => () => geom.dispose(), [geom]);
-  useEffect(() => () => win?.dispose(), [win]);
+type Mats = ReturnType<typeof useMaterials>;
+
+function Lens({ x, y, z, d, ringH, ringWidth, mats }: { x: number; y: number; z: number; d: number; ringH: number; ringWidth: number; mats: Mats }) {
+  const g = useMemo(() => {
+    const ro = d / 2;
+    const ri = ro - Math.max(0.55, d * ringWidth);
+    const H = ringH;
+    const depth = Math.max(0.6, H - 0.08);
+    const ring = latheZ(
+      [
+        [ri, H - depth],
+        [ri, H - 0.22],
+        [ri + 0.16, H],
+        [ro - 0.32, H],
+        [ro - 0.06, H - 0.12],
+        [ro, H - 0.38],
+        [ro, 0.02],
+        [ro + 0.12, 0],
+      ],
+      72,
+    );
+    const floor = new THREE.CircleGeometry(ri * MM, 48);
+    const retainer = new THREE.RingGeometry(ri * 0.52 * MM, ri * 0.7 * MM, 48);
+    const rc = ri * 0.72;
+    const element = new THREE.SphereGeometry(rc * MM, 48, 10, 0, Math.PI * 2, 0, 0.55);
+    element.rotateX(Math.PI / 2);
+    const cover = new THREE.CircleGeometry((ri + 0.05) * MM, 64);
+    const pupil = new THREE.CircleGeometry(ri * 0.16 * MM, 32);
+    return { ring, floor, retainer, element, cover, pupil, ri, rc, H, depth };
+  }, [d, ringH, ringWidth]);
+  useEffect(() => () => Object.values(g).forEach((v) => typeof v === "object" && (v as THREE.BufferGeometry).dispose?.()), [g]);
+  const base = g.H - g.depth;
+  const elementTop = base + g.depth * 0.55;
   return (
-    <group position={[p.x, p.y, 0]}>
-      <mesh geometry={geom} material={material} castShadow receiveShadow />
-      {win && windowMat && <mesh geometry={win} material={windowMat} position={[-p.w * 0.12, 0, depth + 0.0004]} />}
+    <group position={[x, y, z]}>
+      <mesh geometry={g.ring} material={mats.ring} castShadow />
+      <mesh geometry={g.floor} material={mats.barrel} position={[0, 0, (base + 0.01) * MM]} />
+      <mesh geometry={g.retainer} material={mats.retainer} position={[0, 0, (base + g.depth * 0.32) * MM]} />
+      <mesh geometry={g.element} material={mats.element} position={[0, 0, (elementTop - g.rc) * MM]} />
+      <mesh geometry={g.pupil} material={mats.black} position={[0, 0, (elementTop + 0.01) * MM]} />
+      <mesh geometry={g.cover} material={mats.sapphire} position={[0, 0, (g.H - 0.1) * MM]} />
+    </group>
+  );
+}
+
+function Flash({ x, y, z, d, mats }: { x: number; y: number; z: number; d: number; mats: Mats }) {
+  return (
+    <group position={[x, y, z]}>
+      <mesh material={mats.ring} position={[0, 0, 0.12 * MM]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[(d / 2 + 0.35) * MM, (d / 2 + 0.4) * MM, 0.24 * MM, 48, 1, true]} />
+      </mesh>
+      <mesh material={mats.flash} position={[0, 0, 0.05 * MM]}>
+        <circleGeometry args={[(d / 2) * MM, 48]} />
+      </mesh>
+      <mesh material={mats.sapphire} position={[0, 0, 0.24 * MM]}>
+        <circleGeometry args={[(d / 2 + 0.35) * MM, 48]} />
+      </mesh>
+    </group>
+  );
+}
+
+function SideButton({ side, spec, b, mats }: { side: 1 | -1; spec: DeviceSpec; b: { from: number; to: number; type: string }; mats: Mats }) {
+  const geom = useMemo(() => {
+    const len = b.to - b.from;
+    const width = b.type === "switch" ? 2.3 : Math.min(2.6, spec.d * 0.36);
+    const height = b.type === "flush" ? 0.25 : 0.55;
+    const g = capsuleButton(len, width, height);
+    // shape X → world Y (along the side), shape Y → world Z, extrusion → world ±X (outwards)
+    const m = new THREE.Matrix4();
+    if (side === 1) m.makeBasis(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0));
+    else m.makeBasis(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, -1), new THREE.Vector3(-1, 0, 0));
+    g.applyMatrix4(m);
+    return g;
+  }, [b, side, spec.d]);
+  useEffect(() => () => geom.dispose(), [geom]);
+  const y = (spec.h / 2 - (b.from + b.to) / 2) * MM;
+  const x = side * (spec.w / 2 - 0.1) * MM;
+  if (b.type === "switch") {
+    return (
+      <group>
+        <mesh material={mats.black} position={[side * (spec.w / 2 + 0.02) * MM, y, 0]} rotation={[0, (side * Math.PI) / 2, 0]}>
+          <planeGeometry args={[2.6 * MM, (b.to - b.from) * MM]} />
+        </mesh>
+        <mesh geometry={geom} material={mats.frame} position={[x - side * 0.25 * MM, y + 1.2 * MM, 0]} scale={[1, 0.55, 0.8]} />
+      </group>
+    );
+  }
+  return <mesh geometry={geom} material={b.type === "flush" ? mats.darkGlass : mats.frame} position={[x, y, 0]} castShadow />;
+}
+
+function BottomDetails({ spec, mats }: { spec: DeviceSpec; mats: Mats }) {
+  const y = (-spec.h / 2 - 0.03) * MM;
+  const port = useMemo(() => {
+    const pw = spec.port === "usbc" ? 8.9 : 7.7;
+    // keep the port on the flat part of the band
+    const flatPart = 2 * (spec.d / 2 - (spec.band === "flat" ? 0.32 : 0.86) - spec.edgeRadius);
+    const ph = Math.min(spec.port === "usbc" ? 3.2 : 2.6, Math.max(1.8, flatPart + 0.5));
+    return squircleFlat(pw, ph, ph / 2 - 0.05);
+  }, [spec]);
+  useEffect(() => () => port.dispose(), [port]);
+  const holes: number[] = [];
+  for (let i = 0; i < 6; i++) holes.push(8.5 + i * 2.3);
+  return (
+    // rotate so that +Z of the group faces -Y (bottom edge)
+    <group position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]}>
+      <mesh geometry={port} material={mats.black} />
+      {holes.map((x) => (
+        <mesh key={`r${x}`} material={mats.black} position={[x * MM, 0, 0]}>
+          <circleGeometry args={[0.55 * MM, 16]} />
+        </mesh>
+      ))}
+      {spec.kind === "phone" &&
+        holes.map((x) => (
+          <mesh key={`l${x}`} material={mats.black} position={[-x * MM, 0, 0]}>
+            <circleGeometry args={[0.55 * MM, 16]} />
+          </mesh>
+        ))}
+      {spec.kind === "phone" &&
+        [-1, 1].map((s) => (
+          <mesh key={`s${s}`} material={mats.screw} position={[s * 6.2 * MM, 0, 0.001 * MM]}>
+            <circleGeometry args={[0.65 * MM, 16]} />
+          </mesh>
+        ))}
     </group>
   );
 }
