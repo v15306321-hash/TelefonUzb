@@ -5,13 +5,13 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { PrismaClient } from "@prisma/client";
+import { createPrisma } from "../src/lib/prisma-factory";
 import bcrypt from "bcryptjs";
 import sharp from "sharp";
 import { brands, categories, products } from "./seed-data";
 import { defaultSiteContent } from "../src/lib/types";
 
-const prisma = new PrismaClient();
+const prisma = createPrisma();
 const PHOTO_DIR = path.join(__dirname, "seed-assets", "photos");
 
 async function main() {

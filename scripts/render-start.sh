@@ -16,11 +16,6 @@ export DATABASE_URL="$DB"
 
 node scripts/db-check.mjs || true
 
-for attempt in 1 2 3; do
-  if npx prisma migrate deploy; then break; fi
-  if [[ $attempt == 3 ]]; then exit 1; fi
-  echo "migrate failed, retrying in 5s ($attempt/3)…"
-  sleep 5
-done
+node scripts/migrate.mjs
 npm run db:seed
 exec npm start

@@ -2,10 +2,10 @@
  * Create an admin or reset an existing admin's password:
  *   ADMIN_USERNAME=owner ADMIN_PASSWORD='S3cure-pass-2026' npm run admin:create
  */
-import { PrismaClient } from "@prisma/client";
+import { createPrisma } from "../src/lib/prisma-factory";
 import bcrypt from "bcryptjs";
 
-const prisma = new PrismaClient();
+const prisma = createPrisma();
 
 async function main() {
   const username = (process.env.ADMIN_USERNAME ?? "").trim().toLowerCase();
