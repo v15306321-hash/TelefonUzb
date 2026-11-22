@@ -38,5 +38,5 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   // Skip API, Next internals and static files (anything with an extension)
-  matcher: ["/((?!api|_next|media|draco|.*\\..*).*)"],
+  matcher: ["/((?!api|_next|media|.*\\..*).*)"],
 };

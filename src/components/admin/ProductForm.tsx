@@ -3,14 +3,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { saveProductAction } from "@/app/admin/actions";
 import { normalize } from "@/lib/search";
-import { cameraLayouts, deviceKinds, devicePresets, frameFinishes, type ColorOption, type Model3DConfig, type SpecItem } from "@/lib/types";
-import ProductViewer from "@/components/viewer/ProductViewer";
-import RenderFromModel from "./RenderFromModel";
+import type { ColorOption, SpecItem } from "@/lib/types";
 import { Badge, Button, Card, Field, Input, Notice, Select, Textarea, Toggle } from "./ui";
-import { formatBytes, uploadFile } from "./upload";
+import { uploadFile } from "./upload";
 
 export type ProductFormValue = {
   id?: string;
@@ -30,30 +28,9 @@ export type ProductFormValue = {
   storageOptions: string[];
   colors: ColorOption[];
   specs: SpecItem[];
-  model3d: Model3DConfig;
-  model: { id: string; url: string; filename: string; size: number } | null;
-  images: { id: string; url: string }[];
+  /** photos in display order; color = HEX of the product colour shown (null = all colours) */
+  images: { id: string; url: string; color: string | null }[];
 };
-
-const LAYOUT_LABELS: Record<Model3DConfig["layout"], string> = {
-  "pro-triangle": "Три камеры треугольником (iPhone Pro)",
-  "dual-diagonal": "Две камеры по диагонали (iPhone 13/15)",
-  "dual-vertical": "Две камеры вертикально (iPhone 11)",
-  "vertical-trio": "Три камеры вертикально (Galaxy S)",
-  "horizontal-bar": "Горизонтальная панель (Pixel / iPhone Air)",
-  "square-quad": "Квадратный блок 2×2 (Xiaomi / Redmi)",
-  "round-module": "Круглый модуль (Xiaomi Ultra / OnePlus)",
-  single: "Одна камера (планшеты)",
-};
-const PRESET_LABELS: Record<(typeof devicePresets)[number], string> = {
-  "iphone-11": "Apple iPhone 11",
-  "iphone-13": "Apple iPhone 13 / 13 mini / 14",
-  "iphone-13-pro": "Apple iPhone 13 Pro / 14 Pro",
-  "iphone-15": "Apple iPhone 15 / 16",
-  "iphone-17-pro": "Apple iPhone 17 Pro / Pro Max",
-};
-const KIND_LABELS: Record<Model3DConfig["kind"], string> = { phone: "Смартфон", tablet: "Планшет" };
-const FRAME_LABELS: Record<Model3DConfig["frame"], string> = { titanium: "Титан (матовый)", aluminium: "Алюминий", polished: "Полированная сталь" };
 
 const SPEC_TEMPLATE: SpecItem[] = [
   { labelRu: "Экран", labelUz: "Ekran", valueRu: "", valueUz: "" },
@@ -87,14 +64,12 @@ export default function ProductForm({
   const [result, setResult] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState<string | null>(null);
-  const [renderMode, setRenderMode] = useState<"pair" | "back" | null>(null);
-  const [previewColor, setPreviewColor] = useState(0);
   const imageInput = useRef<HTMLInputElement>(null);
-  const modelInput = useRef<HTMLInputElement>(null);
+  const [uploadColor, setUploadColor] = useState<string>(""); // colour assigned to newly uploaded photos
 
   const set = <K extends keyof ProductFormValue>(key: K, value: ProductFormValue[K]) => setV((s) => ({ ...s, [key]: value }));
   const err = (k: string) => fieldErrors[k];
-  const busy = saving || !!uploading || !!renderMode;
+  const busy = saving || !!uploading;
 
   const onImages = async (files: FileList | null) => {
     if (!files?.length) return;
@@ -103,7 +78,7 @@ export default function ProductForm({
       for (const [i, f] of Array.from(files).entries()) {
         setUploading(`Фото ${i + 1}/${files.length}: 0%`);
         const a = await uploadFile(f, "image", (p) => setUploading(`Фото ${i + 1}/${files.length}: ${Math.round(p * 100)}%`));
-        setV((s) => ({ ...s, images: [...s.images, { id: a.id, url: a.url }] }));
+        setV((s) => ({ ...s, images: [...s.images, { id: a.id, url: a.url, color: uploadColor || null }] }));
       }
     } catch (e) {
       setResult({ tone: "error", text: (e as Error).message });
@@ -113,38 +88,16 @@ export default function ProductForm({
     }
   };
 
-  const onModel = async (files: FileList | null) => {
-    const f = files?.[0];
-    if (!f) return;
-    setResult(null);
-    try {
-      setUploading("3D-модель: 0%");
-      const a = await uploadFile(f, "model", (p) => setUploading(`3D-модель: ${Math.round(p * 100)}%`));
-      set("model", { id: a.id, url: a.url, filename: a.filename, size: a.size });
-    } catch (e) {
-      setResult({ tone: "error", text: (e as Error).message });
-    } finally {
-      setUploading(null);
-      if (modelInput.current) modelInput.current.value = "";
-    }
-  };
-
-  const onRendered = useCallback(async (blob: Blob) => {
-    setRenderMode(null);
-    try {
-      setUploading("Сохранение изображения…");
-      const a = await uploadFile(blob, "image", undefined, `render-${Date.now()}.png`);
-      setV((s) => ({ ...s, images: [...s.images, { id: a.id, url: a.url }] }));
-    } catch (e) {
-      setResult({ tone: "error", text: (e as Error).message });
-    } finally {
-      setUploading(null);
-    }
-  }, []);
-  const onRenderError = useCallback((e: Error) => {
-    setRenderMode(null);
-    setResult({ tone: "error", text: e.message });
-  }, []);
+  /** keep photo ↔ colour links valid when a colour is edited or removed */
+  const setColors = (colors: ColorOption[], renamed?: { from: string; to: string }) =>
+    setV((s) => {
+      const hexes = new Set(colors.map((c) => c.hex.toLowerCase()));
+      const images = s.images.map((img) => {
+        if (renamed && img.color === renamed.from.toLowerCase()) return { ...img, color: renamed.to.toLowerCase() };
+        return img.color && !hexes.has(img.color) ? { ...img, color: null } : img;
+      });
+      return { ...s, colors, images };
+    });
 
   const moveImage = (i: number, d: -1 | 1) =>
     setV((s) => {
@@ -177,9 +130,7 @@ export default function ProductForm({
         storageOptions: v.storageOptions,
         colors: v.colors,
         specs: v.specs.filter((s) => s.valueRu.trim()),
-        model3d: v.model3d,
-        modelAssetId: v.model?.id ?? null,
-        imageAssetIds: v.images.map((i) => i.id),
+        images: v.images.map((i) => ({ assetId: i.id, color: i.color })),
       };
       const r = await saveProductAction(payload);
       if (!r.ok) {
@@ -193,8 +144,6 @@ export default function ProductForm({
     });
   };
 
-  const previewHex = v.colors[previewColor]?.hex ?? v.colors[0]?.hex ?? "#2b2b2e";
-  const viewerKey = useMemo(() => `${v.model?.id ?? "proc"}`, [v.model?.id]);
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -212,7 +161,7 @@ export default function ProductForm({
         )}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_400px]">
+      <div className="grid gap-6">
         <div className="flex min-w-0 flex-col gap-6">
           <Card title="Основное">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -325,26 +274,26 @@ export default function ProductForm({
             </div>
           </Card>
 
-          <Card title="Цвета" actions={<Button size="sm" type="button" onClick={() => set("colors", [...v.colors, { nameRu: "", nameUz: "", hex: "#1d1d1f" }])}>+ Цвет</Button>}>
+          <Card title="Цвета" actions={<Button size="sm" type="button" onClick={() => setColors([...v.colors, { nameRu: "", nameUz: "", hex: "#1d1d1f" }])}>+ Цвет</Button>}>
             <div className="flex flex-col gap-3">
               {v.colors.map((c, i) => (
                 <div key={i} className="grid grid-cols-[44px_1fr_1fr_auto] items-center gap-2 sm:grid-cols-[44px_1fr_1fr_120px_auto]">
                   <input
                     type="color"
                     value={c.hex}
-                    onChange={(e) => set("colors", v.colors.map((x, j) => (j === i ? { ...x, hex: e.target.value } : x)))}
+                    onChange={(e) => setColors(v.colors.map((x, j) => (j === i ? { ...x, hex: e.target.value } : x)), { from: c.hex, to: e.target.value })}
                     className="h-11 w-11 cursor-pointer rounded-xl border border-white/10 bg-transparent p-1"
                     aria-label="Цвет"
                   />
                   <Input placeholder="Название (RU)" value={c.nameRu} onChange={(e) => set("colors", v.colors.map((x, j) => (j === i ? { ...x, nameRu: e.target.value } : x)))} aria-invalid={!!err(`colors.${i}.nameRu`)} />
                   <Input placeholder="Название (UZ)" value={c.nameUz} onChange={(e) => set("colors", v.colors.map((x, j) => (j === i ? { ...x, nameUz: e.target.value } : x)))} />
-                  <Input className="hidden sm:block" value={c.hex} onChange={(e) => set("colors", v.colors.map((x, j) => (j === i ? { ...x, hex: e.target.value } : x)))} aria-invalid={!!err(`colors.${i}.hex`)} />
-                  <Button size="sm" variant="danger" type="button" onClick={() => set("colors", v.colors.filter((_, j) => j !== i))} aria-label="Удалить цвет">
+                  <Input className="hidden sm:block" value={c.hex} onChange={(e) => setColors(v.colors.map((x, j) => (j === i ? { ...x, hex: e.target.value } : x)), { from: c.hex, to: e.target.value })} aria-invalid={!!err(`colors.${i}.hex`)} />
+                  <Button size="sm" variant="danger" type="button" onClick={() => setColors(v.colors.filter((_, j) => j !== i))} aria-label="Удалить цвет">
                     ×
                   </Button>
                 </div>
               ))}
-              {!v.colors.length && <p className="text-sm text-white/35">Добавьте цвета — первый используется в 3D-модели по умолчанию.</p>}
+              {!v.colors.length && <p className="text-sm text-white/35">Добавьте цвета, затем привяжите к ним фотографии ниже.</p>}
             </div>
           </Card>
 
@@ -401,10 +350,15 @@ export default function ProductForm({
           <Card
             title="Фотографии"
             actions={
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" type="button" disabled={busy} onClick={() => setRenderMode("pair")} title="Студийный снимок спереди и сзади из 3D-модели">
-                  Сгенерировать из 3D
-                </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                {v.colors.length > 0 && (
+                  <Select value={uploadColor} onChange={(e) => setUploadColor(e.target.value)} className="!h-8 w-48 text-xs" aria-label="Цвет для новых фото">
+                    <option value="">Новые фото: все цвета</option>
+                    {v.colors.map((c) => (
+                      <option key={c.hex} value={c.hex.toLowerCase()}>Новые фото: {c.nameRu || c.hex}</option>
+                    ))}
+                  </Select>
+                )}
                 <Button size="sm" variant="light" type="button" disabled={busy} onClick={() => imageInput.current?.click()}>
                   Загрузить фото
                 </Button>
@@ -413,124 +367,56 @@ export default function ProductForm({
           >
             <input ref={imageInput} type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple hidden onChange={(e) => onImages(e.target.files)} />
             {v.images.length ? (
-              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {v.images.map((img, i) => (
-                  <li key={img.id} className="group relative overflow-hidden rounded-2xl bg-graphite-850 ring-1 ring-white/[0.08]">
-                    <div className="relative aspect-square bg-white">
-                      <Image src={img.url} alt="" fill sizes="200px" className="object-contain p-2" />
-                    </div>
-                    {i === 0 && <span className="absolute left-2 top-2"><Badge tone="neutral">Главное</Badge></span>}
-                    <div className="flex justify-between gap-1 border-t border-white/[0.06] p-1.5">
-                      <div className="flex gap-1">
-                        <Button size="sm" type="button" onClick={() => moveImage(i, -1)} disabled={i === 0} aria-label="Влево">←</Button>
-                        <Button size="sm" type="button" onClick={() => moveImage(i, 1)} disabled={i === v.images.length - 1} aria-label="Вправо">→</Button>
-                      </div>
-                      <Button size="sm" variant="danger" type="button" onClick={() => set("images", v.images.filter((x) => x.id !== img.id))} aria-label="Удалить фото">
-                        ×
-                      </Button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <p className="mb-4 text-xs text-white/40">
+                  Привяжите каждое фото к цвету: на странице товара при выборе цвета показываются только его фото (и фото «для всех цветов»). Первое фото — обложка в каталоге.
+                </p>
+                <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {v.images.map((img, i) => {
+                    const colorHex = img.color;
+                    return (
+                      <li key={img.id} className="group relative overflow-hidden rounded-2xl bg-graphite-850 ring-1 ring-white/[0.08]">
+                        <div className="relative aspect-[4/5] bg-white">
+                          <Image src={img.url} alt="" fill sizes="220px" className="object-contain" />
+                        </div>
+                        {i === 0 && <span className="absolute left-2 top-2"><Badge tone="neutral">Обложка</Badge></span>}
+                        <div className="flex flex-col gap-1.5 border-t border-white/[0.06] p-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="h-4 w-4 shrink-0 rounded-full ring-1 ring-white/25" style={{ background: colorHex ?? "conic-gradient(#e33,#ec3,#3c6,#39e,#a4e,#e33)" }} />
+                            <Select
+                              value={colorHex ?? ""}
+                              onChange={(e) => set("images", v.images.map((x) => (x.id === img.id ? { ...x, color: e.target.value || null } : x)))}
+                              className="!h-8 !px-2 !pr-7 text-xs"
+                              aria-label="Цвет на фото"
+                            >
+                              <option value="">Все цвета</option>
+                              {v.colors.map((c) => (
+                                <option key={c.hex} value={c.hex.toLowerCase()}>{c.nameRu || c.hex}</option>
+                              ))}
+                            </Select>
+                          </div>
+                          <div className="flex justify-between gap-1">
+                            <div className="flex gap-1">
+                              <Button size="sm" type="button" onClick={() => moveImage(i, -1)} disabled={i === 0} aria-label="Влево">←</Button>
+                              <Button size="sm" type="button" onClick={() => moveImage(i, 1)} disabled={i === v.images.length - 1} aria-label="Вправо">→</Button>
+                            </div>
+                            <Button size="sm" variant="danger" type="button" onClick={() => set("images", v.images.filter((x) => x.id !== img.id))} aria-label="Удалить фото">
+                              ×
+                            </Button>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
             ) : (
-              <p className="text-sm text-white/35">JPG, PNG, WebP или AVIF до 12 МБ. Изображения автоматически оптимизируются. Первое фото — обложка в каталоге.</p>
+              <p className="text-sm text-white/35">JPG, PNG, WebP или AVIF до 12 МБ. Изображения автоматически оптимизируются. Загрузите для каждого цвета фото в разных ракурсах.</p>
             )}
-          </Card>
-        </div>
-
-        {/* ---------- 3D column ---------- */}
-        <div className="flex flex-col gap-6 xl:sticky xl:top-6 xl:self-start">
-          <Card title="3D-модель">
-            <div className="relative -mx-2 -mt-2 mb-4 h-[360px] overflow-hidden rounded-2xl bg-gradient-to-b from-black/30 to-black">
-              <ProductViewer
-                key={viewerKey}
-                config={v.model3d}
-                color={previewHex}
-                modelUrl={v.model?.url}
-                fallbackImage={v.images[0] ? { url: v.images[0].url, width: null, height: null } : null}
-                alt="Предпросмотр 3D"
-                labels={{ dragHint: "Потяните, чтобы повернуть", loading: "Загрузка…", fallback: "WebGL недоступен" }}
-              />
-            </div>
-            {v.colors.length > 1 && (
-              <div className="mb-4 flex flex-wrap gap-2">
-                {v.colors.map((c, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setPreviewColor(i)}
-                    className={`h-7 w-7 rounded-full ring-2 ring-offset-2 ring-offset-graphite-900 ${i === previewColor ? "ring-white" : "ring-transparent"}`}
-                    style={{ background: c.hex }}
-                    aria-label={c.nameRu || c.hex}
-                  />
-                ))}
-              </div>
-            )}
-
-            <div className="rounded-2xl border border-white/[0.08] p-4">
-              <p className="text-sm font-medium">Файл модели (GLB / GLTF)</p>
-              {v.model ? (
-                <div className="mt-2 flex items-center justify-between gap-3">
-                  <span className="min-w-0 truncate text-sm text-white/60">
-                    {v.model.filename} · {formatBytes(v.model.size)}
-                  </span>
-                  <div className="flex gap-1">
-                    <Button size="sm" type="button" onClick={() => modelInput.current?.click()} disabled={busy}>Заменить</Button>
-                    <Button size="sm" variant="danger" type="button" onClick={() => set("model", null)}>×</Button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <p className="mt-1 text-xs text-white/40">
-                    Пока файл не загружен, используется процедурная 3D-модель по параметрам ниже. Рекомендуется GLB со сжатием Draco/Meshopt, до 60 МБ.
-                  </p>
-                  <Button size="sm" variant="light" className="mt-3" type="button" onClick={() => modelInput.current?.click()} disabled={busy}>
-                    Загрузить GLB / GLTF
-                  </Button>
-                </>
-              )}
-              <input ref={modelInput} type="file" accept=".glb,.gltf,model/gltf-binary,model/gltf+json" hidden onChange={(e) => onModel(e.target.files)} />
-            </div>
-
-            <div className={`mt-4 grid gap-3 ${v.model ? "opacity-50" : ""}`}>
-              <Field label="Модель корпуса" hint="Точная 3D-геометрия конкретной модели. «Универсальная» — по параметрам ниже.">
-                <Select
-                  value={v.model3d.preset ?? ""}
-                  onChange={(e) => set("model3d", { ...v.model3d, preset: (e.target.value || undefined) as Model3DConfig["preset"] })}
-                >
-                  <option value="">Универсальная</option>
-                  {devicePresets.map((k) => (
-                    <option key={k} value={k}>{PRESET_LABELS[k]}</option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Тип устройства">
-                <Select value={v.model3d.kind} onChange={(e) => set("model3d", { ...v.model3d, kind: e.target.value as Model3DConfig["kind"] })}>
-                  {deviceKinds.map((k) => (
-                    <option key={k} value={k}>{KIND_LABELS[k]}</option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Блок камер">
-                <Select value={v.model3d.layout} onChange={(e) => set("model3d", { ...v.model3d, layout: e.target.value as Model3DConfig["layout"] })}>
-                  {cameraLayouts.map((k) => (
-                    <option key={k} value={k}>{LAYOUT_LABELS[k]}</option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Материал рамки">
-                <Select value={v.model3d.frame} onChange={(e) => set("model3d", { ...v.model3d, frame: e.target.value as Model3DConfig["frame"] })}>
-                  {frameFinishes.map((k) => (
-                    <option key={k} value={k}>{FRAME_LABELS[k]}</option>
-                  ))}
-                </Select>
-              </Field>
-            </div>
           </Card>
         </div>
       </div>
 
-      {renderMode && <RenderFromModel config={v.model3d} color={previewHex} modelUrl={v.model?.url} mode={renderMode} onDone={onRendered} onError={onRenderError} />}
 
       {/* sticky save bar */}
       <div className="sticky bottom-4 z-30 mt-8">
@@ -538,8 +424,6 @@ export default function ProductForm({
           <div className="min-w-0 flex-1 text-sm">
             {uploading ? (
               <span className="text-white/60">Загрузка: {uploading}</span>
-            ) : renderMode ? (
-              <span className="text-white/60">Рендеринг изображения из 3D…</span>
             ) : result ? (
               <Notice tone={result.tone}>{result.text}</Notice>
             ) : (

@@ -103,13 +103,15 @@ export async function saveProductAction(raw: unknown): Promise<ActionResult<{ id
   if (!brand) return { ok: false, error: "Бренд не найден", fieldErrors: { brandId: "Бренд не найден" } };
   if (!category) return { ok: false, error: "Категория не найдена", fieldErrors: { categoryId: "Категория не найдена" } };
 
-  const referenced = [...v.imageAssetIds, ...(v.modelAssetId ? [v.modelAssetId] : [])];
+  const referenced = v.images.map((i) => i.assetId);
   if (referenced.length) {
     const found = await prisma.asset.findMany({ where: { id: { in: referenced } }, select: { id: true, mimeType: true } });
     const byId = new Map(found.map((a) => [a.id, a.mimeType]));
-    if (v.imageAssetIds.some((id) => !byId.get(id)?.startsWith("image/"))) return { ok: false, error: "Одно из изображений не найдено" };
-    if (v.modelAssetId && !byId.get(v.modelAssetId)?.startsWith("model/")) return { ok: false, error: "3D-модель не найдена" };
+    if (referenced.some((id) => !byId.get(id)?.startsWith("image/"))) return { ok: false, error: "Одно из изображений не найдено" };
   }
+  // photo ↔ colour links must point to one of the product's colours
+  const colorHexes = new Set(v.colors.map((c) => c.hex.toLowerCase()));
+  const imageRows = v.images.map((img, i) => ({ assetId: img.assetId, sortOrder: i, colorKey: img.color && colorHexes.has(img.color) ? img.color : null }));
 
   const data = {
     slug: v.slug,
@@ -126,8 +128,6 @@ export async function saveProductAction(raw: unknown): Promise<ActionResult<{ id
     storageOptions: v.storageOptions,
     colors: v.colors,
     specs: v.specs,
-    model3d: v.model3d,
-    modelAssetId: v.modelAssetId,
     brandId: v.brandId,
     categoryId: v.categoryId,
   };
@@ -138,15 +138,12 @@ export async function saveProductAction(raw: unknown): Promise<ActionResult<{ id
     if (v.id) {
       const existing = await prisma.product.findUnique({ where: { id: v.id }, include: { images: true } });
       if (!existing) return { ok: false, error: "Товар не найден" };
-      removedAssets = [
-        ...existing.images.map((i) => i.assetId).filter((a) => !v.imageAssetIds.includes(a)),
-        ...(existing.modelAssetId && existing.modelAssetId !== v.modelAssetId ? [existing.modelAssetId] : []),
-      ];
+      removedAssets = existing.images.map((i) => i.assetId).filter((a) => !referenced.includes(a));
       await prisma.$transaction([
         prisma.productImage.deleteMany({ where: { productId: v.id } }),
         prisma.product.update({
           where: { id: v.id },
-          data: { ...data, images: { create: v.imageAssetIds.map((assetId, i) => ({ assetId, sortOrder: i })) } },
+          data: { ...data, images: { create: imageRows } },
         }),
       ]);
       id = v.id;
@@ -157,7 +154,7 @@ export async function saveProductAction(raw: unknown): Promise<ActionResult<{ id
       await logActivity("update", "product", id, `Изменён «${v.nameRu}»${changes.length ? ` (${changes.join(", ")})` : ""}`, admin.username);
     } else {
       const created = await prisma.product.create({
-        data: { ...data, images: { create: v.imageAssetIds.map((assetId, i) => ({ assetId, sortOrder: i })) } },
+        data: { ...data, images: { create: imageRows } },
       });
       id = created.id;
       await logActivity("create", "product", id, `Добавлен «${v.nameRu}»`, admin.username);

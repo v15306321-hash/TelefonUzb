@@ -84,21 +84,17 @@ export default async function ProductPage({ params }: Props) {
 
       <ProductShowcase
         name={name}
-        model3d={p.model3d}
-        modelUrl={p.modelUrl}
         images={p.images}
         colors={p.colors.map((c) => ({ name: pick(locale, c.nameRu, c.nameUz), hex: c.hex }))}
         storageOptions={p.storageOptions}
         labels={{
           color: dict.product.color,
           storage: dict.product.storage,
-          dragHint: dict.product.dragHint,
-          zoomIn: dict.product.zoomIn,
-          zoomOut: dict.product.zoomOut,
-          loading3d: dict.product.loading3d,
-          fallback3d: dict.product.fallback3d,
-          view3d: dict.product.view3d,
           photos: dict.product.photos,
+          prevPhoto: dict.product.prevPhoto,
+          nextPhoto: dict.product.nextPhoto,
+          openPhoto: dict.product.openPhoto,
+          closePhoto: dict.product.closePhoto,
         }}
         header={
           <div className="animate-fade-up">

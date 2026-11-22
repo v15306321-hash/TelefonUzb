@@ -20,29 +20,6 @@ export const specItemSchema = z.object({
 });
 export type SpecItem = z.infer<typeof specItemSchema>;
 
-export const deviceKinds = ["phone", "tablet"] as const;
-export const cameraLayouts = [
-  "pro-triangle",
-  "dual-diagonal",
-  "dual-vertical",
-  "vertical-trio",
-  "horizontal-bar",
-  "square-quad",
-  "round-module",
-  "single",
-] as const;
-export const frameFinishes = ["titanium", "aluminium", "polished"] as const;
-/** Exact device models with dedicated 3D geometry (see components/viewer/device-specs.ts). */
-export const devicePresets = ["iphone-11", "iphone-13", "iphone-13-pro", "iphone-15", "iphone-17-pro"] as const;
-
-export const model3dSchema = z.object({
-  kind: z.enum(deviceKinds).default("phone"),
-  layout: z.enum(cameraLayouts).default("pro-triangle"),
-  frame: z.enum(frameFinishes).default("aluminium"),
-  preset: z.enum(devicePresets).optional(),
-});
-export type Model3DConfig = z.infer<typeof model3dSchema>;
-
 export function parseColors(value: unknown): ColorOption[] {
   const r = z.array(colorOptionSchema).safeParse(value);
   return r.success ? r.data : [];
@@ -51,11 +28,6 @@ export function parseSpecs(value: unknown): SpecItem[] {
   const r = z.array(specItemSchema).safeParse(value);
   return r.success ? r.data : [];
 }
-export function parseModel3d(value: unknown): Model3DConfig {
-  const r = model3dSchema.safeParse(value ?? {});
-  return r.success ? r.data : model3dSchema.parse({});
-}
-
 /* ---------- Site settings ---------- */
 
 const loc = (max: number) => z.string().trim().max(max).default("");

@@ -16,7 +16,7 @@ export default async function Dashboard() {
     prisma.category.count(),
     prisma.brand.count(),
     prisma.product.findMany({ orderBy: { createdAt: "desc" }, take: 6, include: { brand: true } }),
-    prisma.activityLog.findMany({ orderBy: { createdAt: "desc" }, take: 12, where: { action: { not: "login" } } }),
+    prisma.activityLog.findMany({ orderBy: { createdAt: "desc" }, take: 12, where: { action: { notIn: ["login", "seed-photo"] } } }),
   ]);
 
   const stats = [

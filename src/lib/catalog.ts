@@ -5,11 +5,12 @@ import { prisma } from "./db";
 import { pick } from "./localize";
 import { buildDoc, searchDocs } from "./search";
 import { assetUrl } from "./storage";
-import { parseColors, parseModel3d, parseSpecs, type ColorOption, type Model3DConfig, type SpecItem } from "./types";
+import { parseColors, parseSpecs, type ColorOption, type SpecItem } from "./types";
 
 export const CATALOG_TAG = "catalog";
 
-export type CatalogImage = { url: string; width: number | null; height: number | null };
+/** `color` = HEX of the product colour the photo shows (null = any colour). */
+export type CatalogImage = { url: string; width: number | null; height: number | null; color: string | null };
 
 export type CatalogProduct = {
   id: string;
@@ -26,8 +27,6 @@ export type CatalogProduct = {
   storageOptions: string[];
   colors: ColorOption[];
   specs: SpecItem[];
-  model3d: Model3DConfig;
-  modelUrl: string | null;
   images: CatalogImage[];
   brand: { id: string; slug: string; name: string };
   category: { id: string; slug: string; nameRu: string; nameUz: string };
@@ -64,15 +63,13 @@ export const getVisibleProducts = unstable_cache(
       storageOptions: p.storageOptions,
       colors: parseColors(p.colors),
       specs: parseSpecs(p.specs),
-      model3d: parseModel3d(p.model3d),
-      modelUrl: assetUrl(p.modelAssetId),
-      images: p.images.map((i) => ({ url: assetUrl(i.asset.id)!, width: i.asset.width, height: i.asset.height })),
+      images: p.images.map((i) => ({ url: assetUrl(i.asset.id)!, width: i.asset.width, height: i.asset.height, color: i.colorKey?.toLowerCase() ?? null })),
       brand: p.brand,
       category: p.category,
       createdAt: p.createdAt.toISOString(),
     }));
   },
-  ["visible-products-v1"],
+  ["visible-products-v2"],
   { tags: [CATALOG_TAG], revalidate: 3600 },
 );
 

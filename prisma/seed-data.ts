@@ -1,6 +1,6 @@
 /* Initial catalog for TELEFON.UZB. Prices are in UZS and can be edited in the admin panel. */
 
-import type { ColorOption, Model3DConfig, SpecItem } from "../src/lib/types";
+import type { ColorOption, SpecItem } from "../src/lib/types";
 
 export const categories = [
   { slug: "smartfony", nameRu: "Смартфоны", nameUz: "Smartfonlar", sortOrder: 10 },
@@ -32,10 +32,14 @@ type Seed = {
   storage: string[];
   colors: ColorOption[];
   specs: SpecItem[];
-  model3d: Model3DConfig;
   daysAgo: number;
-  /** Real product photos from prisma/seed-assets/photos (in the same order as colours where possible). */
-  photos?: string[];
+  /**
+   * Real product photos from prisma/seed-assets/photos. A plain name at index i belongs to colour i;
+   * `{ file, color }` links a photo (e.g. another angle) to a colour index explicitly.
+   */
+  photos?: (string | { file: string; color: number })[];
+  /** Previously seeded colour lists that may be safely upgraded to `colors` (never overwrites admin edits). */
+  previousColors?: ColorOption[][];
   /** Products without real photos are created hidden — publish them after uploading photos in the admin. */
   hidden?: boolean;
 };
@@ -57,6 +61,11 @@ const iphoneSpecs = (screen: string, chip: string, camRu: string, camUz: string,
   s("Вес", "Og‘irligi", `${weight} г`, `${weight} g`),
 ];
 
+/** Additional angles per colour: poses(["green"], "iphone-13", ["side","camera"]) → iphone-13-green-side … */
+function poses(colorNames: string[], prefix: string, angles: string[], firstColor = 0) {
+  return colorNames.flatMap((name, i) => angles.map((a) => ({ file: `${prefix}-${name}-${a}`, color: firstColor + i })));
+}
+
 /** Models with real product photos (shown first in the catalog). */
 const photoProducts: Seed[] = [
   {
@@ -71,7 +80,6 @@ const photoProducts: Seed[] = [
     storage: ["128 GB", "256 GB", "512 GB"],
     colors: [c("Зелёный", "Yashil", "#dfe8d4"), c("Розовый", "Pushti", "#f2d3da"), c("Чёрный", "Qora", "#3b3c3e"), c("Голубой", "Havorang", "#d4e2ea")],
     specs: iphoneSpecs('6,1" Super Retina XDR', "Apple A16 Bionic", "48 + 12 Мп", "48 + 12 MP", 171),
-    model3d: { kind: "phone", layout: "dual-diagonal", frame: "aluminium", preset: "iphone-15" },
     daysAgo: 1,
     photos: ["iphone-15-green", "iphone-15-pink", "iphone-15-black", "iphone-15-blue"],
   },
@@ -93,9 +101,23 @@ const photoProducts: Seed[] = [
       c("Небесно-голубой", "Osmon ko‘k", "#a7c1d9"),
     ],
     specs: iphoneSpecs('6,1" Super Retina XDR, ProMotion 120 Гц', "Apple A15 Bionic", "12 + 12 + 12 Мп, LiDAR", "12 + 12 + 12 MP, LiDAR", 204),
-    model3d: { kind: "phone", layout: "pro-triangle", frame: "polished", preset: "iphone-13-pro" },
     daysAgo: 6,
     photos: ["iphone-13-pro-silver", "iphone-13-pro-graphite", "iphone-13-pro-gold", "iphone-13-pro-alpine-green", "iphone-13-pro-sierra-blue"],
+  },
+  {
+    slug: "apple-iphone-14-pro",
+    brand: "apple",
+    category: "smartfony",
+    nameRu: "Apple iPhone 14 Pro",
+    descriptionRu: "Dynamic Island, дисплей Always-On, основная камера 48 Мп и чип A16 Bionic в корпусе из нержавеющей стали.",
+    descriptionUz: "Dynamic Island, Always-On displey, 48 MP asosiy kamera va zanglamas po‘lat korpusdagi A16 Bionic chipi.",
+    price: 11_400_000,
+    isFeatured: true,
+    storage: ["128 GB", "256 GB", "512 GB", "1 TB"],
+    colors: [c("Тёмно-фиолетовый", "To‘q binafsha", "#4f4359"), c("Серебристый", "Kumushrang", "#e3e3e1")],
+    specs: iphoneSpecs('6,1" Super Retina XDR, ProMotion 120 Гц, Always-On', "Apple A16 Bionic", "48 + 12 + 12 Мп, LiDAR", "48 + 12 + 12 MP, LiDAR", 206),
+    daysAgo: 7,
+    photos: ["iphone-14-pro-purple-side", "iphone-14-pro-silver-side"],
   },
   {
     slug: "apple-iphone-13",
@@ -115,9 +137,11 @@ const photoProducts: Seed[] = [
       c("(PRODUCT)RED", "(PRODUCT)RED", "#b5121f"),
     ],
     specs: iphoneSpecs('6,1" Super Retina XDR', "Apple A15 Bionic", "12 + 12 Мп", "12 + 12 MP", 173),
-    model3d: { kind: "phone", layout: "dual-diagonal", frame: "aluminium", preset: "iphone-13" },
     daysAgo: 8,
-    photos: ["iphone-13-green", "iphone-13-starlight", "iphone-13-blue", "iphone-13-midnight", "iphone-13-red"],
+    photos: [
+      "iphone-13-green", "iphone-13-starlight", "iphone-13-blue", "iphone-13-midnight", "iphone-13-red",
+      ...poses(["green", "starlight", "blue", "midnight", "red"], "iphone-13", ["side", "camera"]),
+    ],
   },
   {
     slug: "apple-iphone-11",
@@ -137,7 +161,6 @@ const photoProducts: Seed[] = [
       c("(PRODUCT)RED", "(PRODUCT)RED", "#b0182a"),
     ],
     specs: iphoneSpecs('6,1" Liquid Retina HD', "Apple A13 Bionic", "12 + 12 Мп", "12 + 12 MP", 194),
-    model3d: { kind: "phone", layout: "dual-vertical", frame: "aluminium", preset: "iphone-11" },
     daysAgo: 12,
     photos: ["iphone-11-white", "iphone-11-purple", "iphone-11-green", "iphone-11-black", "iphone-11-red"],
   },
@@ -157,7 +180,8 @@ export const products: Seed[] = [
     price: 19_400_000,
     isFeatured: true,
     storage: ["256 GB", "512 GB", "1 TB", "2 TB"],
-    colors: [c("Космический оранжевый", "Kosmik to‘q sariq", "#d9733b"), c("Глубокий синий", "To‘q ko‘k", "#2d3a56"), c("Серебристый", "Kumushrang", "#dcdcdf")],
+    colors: [c("Небесно-голубой", "Osmon ko‘k", "#a9bfd8"), c("Чёрный", "Qora", "#2b2b2d"), c("Бордовый", "Bordo", "#6b2a35"), c("Белый", "Oq", "#e9e9eb")],
+    previousColors: [[c("Космический оранжевый", "Kosmik to‘q sariq", "#d9733b"), c("Глубокий синий", "To‘q ko‘k", "#2d3a56"), c("Серебристый", "Kumushrang", "#dcdcdf")]],
     specs: [
       s("Экран", "Ekran", '6,9" Super Retina XDR, ProMotion 120 Гц', '6,9" Super Retina XDR, ProMotion 120 Hz'),
       s("Процессор", "Protsessor", "Apple A19 Pro"),
@@ -168,9 +192,14 @@ export const products: Seed[] = [
       sim("nano-SIM + eSIM", "nano-SIM + eSIM"),
       s("Вес", "Og‘irligi", "231 г", "231 g"),
     ],
-    model3d: { kind: "phone", layout: "pro-triangle", frame: "aluminium", preset: "iphone-17-pro" },
     daysAgo: 2,
-    photos: ["iphone-17-pro-blue"],
+    photos: [
+      { file: "iphone-17-pro-blue", color: 0 },
+      ...poses(["blue"], "iphone-17-pro", ["side", "camera"], 0),
+      ...poses(["black"], "iphone-17-pro", ["side", "camera"], 1),
+      ...poses(["burgundy"], "iphone-17-pro", ["side", "camera"], 2),
+      { file: "iphone-17-pro-white-camera", color: 3 },
+    ],
   },
   {
     slug: "apple-iphone-17-pro",
@@ -193,7 +222,6 @@ export const products: Seed[] = [
       sim("nano-SIM + eSIM", "nano-SIM + eSIM"),
       s("Вес", "Og‘irligi", "204 г", "204 g"),
     ],
-    model3d: { kind: "phone", layout: "pro-triangle", frame: "aluminium", preset: "iphone-17-pro" },
     daysAgo: 3,
     hidden: true,
   },
@@ -217,7 +245,6 @@ export const products: Seed[] = [
       sim("Только eSIM", "Faqat eSIM"),
       s("Вес", "Og‘irligi", "165 г", "165 g"),
     ],
-    model3d: { kind: "phone", layout: "horizontal-bar", frame: "polished" },
     daysAgo: 4,
     hidden: true,
   },
@@ -241,7 +268,6 @@ export const products: Seed[] = [
       sim("nano-SIM + eSIM", "nano-SIM + eSIM"),
       s("Вес", "Og‘irligi", "177 г", "177 g"),
     ],
-    model3d: { kind: "phone", layout: "dual-diagonal", frame: "aluminium", preset: "iphone-15" },
     daysAgo: 5,
     hidden: true,
   },
@@ -264,7 +290,6 @@ export const products: Seed[] = [
       sim("nano-SIM + eSIM", "nano-SIM + eSIM"),
       s("Вес", "Og‘irligi", "170 г", "170 g"),
     ],
-    model3d: { kind: "phone", layout: "dual-diagonal", frame: "aluminium", preset: "iphone-15" },
     daysAgo: 60,
     hidden: true,
   },
@@ -290,7 +315,6 @@ export const products: Seed[] = [
       sim("2 × nano-SIM + eSIM", "2 × nano-SIM + eSIM"),
       s("Вес", "Og‘irligi", "218 г", "218 g"),
     ],
-    model3d: { kind: "phone", layout: "vertical-trio", frame: "titanium" },
     daysAgo: 30,
     hidden: true,
   },
@@ -312,7 +336,6 @@ export const products: Seed[] = [
       android("Android 15, One UI 7"),
       sim("2 × nano-SIM + eSIM", "2 × nano-SIM + eSIM"),
     ],
-    model3d: { kind: "phone", layout: "vertical-trio", frame: "aluminium" },
     daysAgo: 28,
     hidden: true,
   },
@@ -333,7 +356,6 @@ export const products: Seed[] = [
       s("Аккумулятор", "Batareya", "5000 мА·ч, 45 Вт", "5000 mAh, 45 W"),
       android("Android 15, One UI 7"),
     ],
-    model3d: { kind: "phone", layout: "vertical-trio", frame: "aluminium" },
     daysAgo: 45,
     hidden: true,
   },
@@ -355,7 +377,6 @@ export const products: Seed[] = [
       s("Аккумулятор", "Batareya", "4870 мА·ч", "4870 mAh"),
       android("Android 16"),
     ],
-    model3d: { kind: "phone", layout: "horizontal-bar", frame: "polished" },
     daysAgo: 20,
     hidden: true,
   },
@@ -375,7 +396,6 @@ export const products: Seed[] = [
       s("Основная камера", "Asosiy kamera", "48 + 13 + 10,8 Мп", "48 + 13 + 10,8 MP"),
       android("Android 16"),
     ],
-    model3d: { kind: "phone", layout: "horizontal-bar", frame: "aluminium" },
     daysAgo: 21,
     hidden: true,
   },
@@ -397,7 +417,6 @@ export const products: Seed[] = [
       s("Аккумулятор", "Batareya", "5410 мА·ч, 90 Вт", "5410 mAh, 90 W"),
       android("Android 15, HyperOS 2"),
     ],
-    model3d: { kind: "phone", layout: "round-module", frame: "aluminium" },
     daysAgo: 35,
     hidden: true,
   },
@@ -417,7 +436,6 @@ export const products: Seed[] = [
       s("Основная камера", "Asosiy kamera", "50 + 50 + 60 Мп, Leica", "50 + 50 + 60 MP, Leica"),
       android("Android 15, HyperOS 2"),
     ],
-    model3d: { kind: "phone", layout: "square-quad", frame: "aluminium" },
     daysAgo: 40,
     hidden: true,
   },
@@ -438,7 +456,6 @@ export const products: Seed[] = [
       s("Аккумулятор", "Batareya", "5110 мА·ч, 120 Вт", "5110 mAh, 120 W"),
       android("Android 14, HyperOS"),
     ],
-    model3d: { kind: "phone", layout: "square-quad", frame: "aluminium" },
     daysAgo: 70,
     hidden: true,
   },
@@ -459,7 +476,6 @@ export const products: Seed[] = [
       s("Аккумулятор", "Batareya", "6000 мА·ч, 100 Вт", "6000 mAh, 100 W"),
       android("Android 15, OxygenOS 15"),
     ],
-    model3d: { kind: "phone", layout: "round-module", frame: "polished" },
     daysAgo: 50,
     hidden: true,
   },
@@ -481,7 +497,6 @@ export const products: Seed[] = [
       s("Аккумулятор", "Batareya", "5270 мА·ч, 100 Вт", "5270 mAh, 100 W"),
       android("Android 15, MagicOS 9"),
     ],
-    model3d: { kind: "phone", layout: "round-module", frame: "aluminium" },
     daysAgo: 55,
     hidden: true,
   },
@@ -503,7 +518,6 @@ export const products: Seed[] = [
       ios("iPadOS 26"),
       s("Вес", "Og‘irligi", "444 г", "444 g"),
     ],
-    model3d: { kind: "tablet", layout: "single", frame: "aluminium" },
     daysAgo: 10,
     hidden: true,
   },
@@ -523,7 +537,6 @@ export const products: Seed[] = [
       s("Камера", "Kamera", "12 Мп", "12 MP"),
       ios("iPadOS 26"),
     ],
-    model3d: { kind: "tablet", layout: "single", frame: "aluminium" },
     daysAgo: 25,
     hidden: true,
   },
@@ -543,7 +556,6 @@ export const products: Seed[] = [
       s("Аккумулятор", "Batareya", "8000 мА·ч", "8000 mAh"),
       android("Android 15, One UI 7"),
     ],
-    model3d: { kind: "tablet", layout: "single", frame: "aluminium" },
     daysAgo: 65,
     hidden: true,
   },
@@ -563,7 +575,6 @@ export const products: Seed[] = [
       s("Аккумулятор", "Batareya", "8850 мА·ч", "8850 mAh"),
       android("Android 15, HyperOS 2"),
     ],
-    model3d: { kind: "tablet", layout: "single", frame: "aluminium" },
     daysAgo: 80,
     hidden: true,
   },

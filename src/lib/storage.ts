@@ -11,11 +11,10 @@ import { prisma } from "./db";
  * does not require any change in the UI or stored data.
  */
 
-export type UploadKind = "image" | "model" | "video";
+export type UploadKind = "image" | "video";
 
 export const uploadRules: Record<UploadKind, { maxBytes: number; mime: string[]; ext: string[] }> = {
   image: { maxBytes: 12 * 1024 * 1024, mime: ["image/jpeg", "image/png", "image/webp", "image/avif"], ext: ["jpg", "jpeg", "png", "webp", "avif"] },
-  model: { maxBytes: 60 * 1024 * 1024, mime: ["model/gltf-binary", "model/gltf+json"], ext: ["glb", "gltf"] },
   video: { maxBytes: 80 * 1024 * 1024, mime: ["video/mp4", "video/webm"], ext: ["mp4", "webm"] },
 };
 

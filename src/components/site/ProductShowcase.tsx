@@ -1,29 +1,23 @@
 "use client";
 
-import Image from "next/image";
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { CatalogImage } from "@/lib/catalog";
-import type { Model3DConfig } from "@/lib/types";
-import ProductViewer from "@/components/viewer/ProductViewer";
+import ProductGallery from "./ProductGallery";
 
 type ColorView = { name: string; hex: string };
 
 type Labels = {
   color: string;
   storage: string;
-  dragHint: string;
-  zoomIn: string;
-  zoomOut: string;
-  loading3d: string;
-  fallback3d: string;
-  view3d: string;
   photos: string;
+  prevPhoto: string;
+  nextPhoto: string;
+  openPhoto: string;
+  closePhoto: string;
 };
 
 export default function ProductShowcase({
   name,
-  model3d,
-  modelUrl,
   images,
   colors,
   storageOptions,
@@ -33,8 +27,6 @@ export default function ProductShowcase({
   children,
 }: {
   name: string;
-  model3d: Model3DConfig;
-  modelUrl: string | null;
   images: CatalogImage[];
   colors: ColorView[];
   storageOptions: string[];
@@ -45,60 +37,23 @@ export default function ProductShowcase({
 }) {
   const [colorIdx, setColorIdx] = useState(0);
   const [storage, setStorage] = useState(storageOptions[0] ?? "");
-  const [view, setView] = useState<number>(-1); // -1 = 3D, otherwise photo index
-  const color = colors[colorIdx]?.hex ?? "#2b2b2e";
-  const photo = view >= 0 ? images[view] : null;
+  const hex = colors[colorIdx]?.hex.toLowerCase();
+
+  // photos of the selected colour (+ photos valid for every colour); all photos if none are linked
+  const shown = useMemo(() => {
+    const own = images.filter((i) => i.color === hex || i.color === null);
+    return own.length ? own : images;
+  }, [images, hex]);
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1.12fr_1fr] lg:gap-14">
-      {/* -------- visual column -------- */}
+      {/* -------- photos -------- */}
       <div className="lg:sticky lg:top-24 lg:self-start">
-        <div className="relative h-[58svh] min-h-[380px] overflow-hidden rounded-[32px] bg-gradient-to-b from-graphite-900 to-black ring-1 ring-white/[0.06] sm:h-[66svh] lg:h-[calc(100svh-9.5rem)] lg:max-h-[860px]">
-          {photo ? (
-            <div className="absolute inset-0 animate-fade-in bg-white p-6 sm:p-10">
-              <Image src={photo.url} alt={name} fill sizes="(max-width: 1024px) 100vw, 55vw" className="object-contain p-6 sm:p-10" />
-            </div>
-          ) : (
-            <ProductViewer
-              config={model3d}
-              color={color}
-              modelUrl={modelUrl}
-              fallbackImage={images[0] ?? null}
-              alt={name}
-              labels={{ dragHint: labels.dragHint, loading: labels.loading3d, fallback: labels.fallback3d, zoomIn: labels.zoomIn, zoomOut: labels.zoomOut }}
-            />
-          )}
-        </div>
-
-        {images.length > 0 && (
-          <div className="no-scrollbar mt-3 flex gap-2 overflow-x-auto" role="tablist" aria-label={labels.photos}>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={view === -1}
-              onClick={() => setView(-1)}
-              className={`grid h-16 w-16 shrink-0 place-items-center rounded-2xl text-sm font-bold tracking-tight ring-1 transition ${
-                view === -1 ? "bg-white text-black ring-white" : "bg-graphite-900 text-white/70 ring-white/10 hover:ring-white/30"
-              }`}
-              aria-label={labels.view3d}
-            >
-              3D
-            </button>
-            {images.map((img, i) => (
-              <button
-                key={img.url}
-                type="button"
-                role="tab"
-                aria-selected={view === i}
-                onClick={() => setView(i)}
-                className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-white ring-1 transition ${view === i ? "ring-white" : "ring-white/10 hover:ring-white/30"}`}
-                aria-label={`${labels.photos} ${i + 1}`}
-              >
-                <Image src={img.url} alt="" fill sizes="64px" className="object-contain p-1.5" />
-              </button>
-            ))}
-          </div>
-        )}
+        <ProductGallery
+          images={shown}
+          alt={colors[colorIdx] ? `${name}, ${colors[colorIdx].name}` : name}
+          labels={{ photos: labels.photos, prev: labels.prevPhoto, next: labels.nextPhoto, open: labels.openPhoto, close: labels.closePhoto }}
+        />
       </div>
 
       {/* -------- info column -------- */}
@@ -118,11 +73,7 @@ export default function ProductShowcase({
                     name="color"
                     className="peer sr-only"
                     checked={i === colorIdx}
-                    onChange={() => {
-                      setColorIdx(i);
-                      // photos are ordered like colours: keep showing a photo, just of the chosen colour
-                      setView((v) => (v >= 0 && images.length === colors.length ? i : -1));
-                    }}
+                    onChange={() => setColorIdx(i)}
                   />
                   <span className="sr-only">{c.name}</span>
                   <span

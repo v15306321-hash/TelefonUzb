@@ -17,13 +17,11 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: { bodySizeLimit: "2mb" },
-    optimizePackageImports: ["@react-three/drei"],
   },
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },
       { source: "/media/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=2592000, stale-while-revalidate=86400" }] },
-      { source: "/draco/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] },
     ];
   },
 };

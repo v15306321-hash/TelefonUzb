@@ -54,7 +54,6 @@ async function main() {
           storageOptions: p.storage,
           colors: p.colors,
           specs: p.specs,
-          model3d: p.model3d,
           brandId: brandId[p.brand],
           categoryId: catId[p.category],
           createdAt: new Date(Date.now() - p.daysAgo * 86400_000),
@@ -63,24 +62,17 @@ async function main() {
       });
       created++;
     }
-    // upgrade older records to the exact-model 3D preset (keeps any admin changes otherwise)
-    const current = (product.model3d ?? {}) as Record<string, unknown>;
-    if (p.model3d.preset && !current.preset) {
-      await prisma.product.update({ where: { id: product.id }, data: { model3d: { ...current, preset: p.model3d.preset } } });
+    if (!product) continue;
+    // upgrade seeded colour lists that the admin has not changed
+    // compare ignoring JSON key order (PostgreSQL jsonb reorders keys)
+    const sig = (list: unknown) =>
+      JSON.stringify((Array.isArray(list) ? list : []).map((c: { nameRu?: string; nameUz?: string; hex?: string }) => [c.nameRu, c.nameUz, c.hex?.toLowerCase()]));
+    const currentColors = sig(product.colors);
+    if (p.previousColors?.some((prev) => sig(prev) === currentColors)) {
+      product = await prisma.product.update({ where: { id: product.id }, data: { colors: p.colors }, include: { images: true } });
+      console.log(`  ~ colours updated for ${p.slug}`);
     }
-    // attach real product photos if the product has none yet
-    if (product.images.length === 0 && p.photos?.length) {
-      const files = p.photos.map((n) => path.join(PHOTO_DIR, `${n}.webp`)).filter((f) => existsSync(f));
-      for (const [idx, file] of files.entries()) {
-        const buf = readFileSync(file);
-        const meta = await sharp(buf).metadata();
-        const asset = await prisma.asset.create({
-          data: { filename: path.basename(file), mimeType: "image/webp", size: buf.length, driver: "db", data: new Uint8Array(buf), width: meta.width ?? null, height: meta.height ?? null },
-        });
-        await prisma.productImage.create({ data: { productId: product.id, assetId: asset.id, sortOrder: idx } });
-      }
-      if (files.length) console.log(`  + ${files.length} photo(s) for ${p.slug}`);
-    }
+    await syncPhotos(product.id, p.slug, p.photos ?? [], p.colors.map((c) => c.hex.toLowerCase()));
   }
   console.log(`✓ products: ${created} created, ${products.length - created} already existed`);
 
@@ -90,6 +82,44 @@ async function main() {
     await prisma.activityLog.create({ data: { action: "create", entity: "catalog", summary: "Каталог заполнен начальными данными" } });
   }
   console.log("✓ seed complete");
+}
+
+/**
+ * Attach seed photos to a product: adds missing photos, links existing ones to their colour.
+ * Every attached photo is recorded in the activity log, so a photo the admin deleted is never re-added.
+ */
+async function syncPhotos(productId: string, slug: string, photos: NonNullable<(typeof products)[number]["photos"]>, hexes: string[]) {
+  if (!photos.length) return;
+  const images = await prisma.productImage.findMany({ where: { productId }, include: { asset: { select: { filename: true } } }, orderBy: { sortOrder: "asc" } });
+  let order = images.reduce((m, i) => Math.max(m, i.sortOrder), -1) + 1;
+  let added = 0;
+  for (const [idx, entry] of photos.entries()) {
+    const file = typeof entry === "string" ? entry : entry.file;
+    const colorIdx = typeof entry === "string" ? idx : entry.color;
+    const colorKey = hexes[colorIdx] ?? null;
+    const filename = `${file}.webp`;
+    const marker = `${slug}/${file}`;
+    const existing = images.find((i) => i.asset.filename === filename);
+    if (existing) {
+      if (existing.colorKey !== colorKey) await prisma.productImage.update({ where: { id: existing.id }, data: { colorKey } });
+      if (!(await prisma.activityLog.findFirst({ where: { action: "seed-photo", summary: marker } }))) {
+        await prisma.activityLog.create({ data: { action: "seed-photo", entity: "product", entityId: productId, summary: marker } });
+      }
+      continue;
+    }
+    if (await prisma.activityLog.findFirst({ where: { action: "seed-photo", summary: marker } })) continue; // removed by admin
+    const path_ = path.join(PHOTO_DIR, filename);
+    if (!existsSync(path_)) continue;
+    const buf = readFileSync(path_);
+    const meta = await sharp(buf).metadata();
+    const asset = await prisma.asset.create({
+      data: { filename, mimeType: "image/webp", size: buf.length, driver: "db", data: new Uint8Array(buf), width: meta.width ?? null, height: meta.height ?? null },
+    });
+    await prisma.productImage.create({ data: { productId, assetId: asset.id, sortOrder: order++, colorKey } });
+    await prisma.activityLog.create({ data: { action: "seed-photo", entity: "product", entityId: productId, summary: marker } });
+    added++;
+  }
+  if (added) console.log(`  + ${added} photo(s) for ${slug}`);
 }
 
 main()

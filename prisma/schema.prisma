@@ -88,6 +88,8 @@ model ProductImage {
   assetId   String
   asset     Asset   @relation(fields: [assetId], references: [id], onDelete: Cascade)
   sortOrder Int     @default(0)
+  /// HEX of the product colour this photo shows (null = all colours)
+  colorKey  String?
 
   @@index([productId, sortOrder])
 }

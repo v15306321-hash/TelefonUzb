@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "../db";
 import { assetUrl } from "../storage";
-import { parseColors, parseModel3d, parseSpecs } from "../types";
+import { parseColors, parseSpecs } from "../types";
 import type { ProductFormValue } from "@/components/admin/ProductForm";
 
 export async function loadFormOptions() {
@@ -15,7 +15,7 @@ export async function loadFormOptions() {
 export async function loadProductForm(id: string): Promise<ProductFormValue | null> {
   const p = await prisma.product.findUnique({
     where: { id },
-    include: { images: { orderBy: { sortOrder: "asc" } }, modelAsset: { select: { id: true, filename: true, size: true } } },
+    include: { images: { orderBy: { sortOrder: "asc" } } },
   });
   if (!p) return null;
   return {
@@ -36,9 +36,7 @@ export async function loadProductForm(id: string): Promise<ProductFormValue | nu
     storageOptions: p.storageOptions,
     colors: parseColors(p.colors),
     specs: parseSpecs(p.specs),
-    model3d: parseModel3d(p.model3d),
-    model: p.modelAsset ? { id: p.modelAsset.id, url: assetUrl(p.modelAsset.id)!, filename: p.modelAsset.filename, size: p.modelAsset.size } : null,
-    images: p.images.map((i) => ({ id: i.assetId, url: assetUrl(i.assetId)! })),
+    images: p.images.map((i) => ({ id: i.assetId, url: assetUrl(i.assetId)!, color: i.colorKey?.toLowerCase() ?? null })),
   };
 }
 
@@ -59,7 +57,5 @@ export const emptyProductForm = (brandId = "", categoryId = ""): ProductFormValu
   storageOptions: [],
   colors: [{ nameRu: "Чёрный", nameUz: "Qora", hex: "#1d1d1f" }],
   specs: [],
-  model3d: { kind: "phone", layout: "pro-triangle", frame: "aluminium" },
-  model: null,
   images: [],
 });

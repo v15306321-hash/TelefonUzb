@@ -3,7 +3,7 @@
 export type UploadedAsset = { id: string; url: string; width: number | null; height: number | null; mimeType: string; size: number; filename: string };
 
 /** Upload a file to /api/admin/upload with progress reporting. */
-export function uploadFile(file: File | Blob, kind: "image" | "model" | "video", onProgress?: (p: number) => void, filename?: string): Promise<UploadedAsset> {
+export function uploadFile(file: File | Blob, kind: "image" | "video", onProgress?: (p: number) => void, filename?: string): Promise<UploadedAsset> {
   return new Promise((resolve, reject) => {
     const fd = new FormData();
     fd.append("kind", kind);

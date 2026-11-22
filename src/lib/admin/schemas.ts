@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { colorOptionSchema, model3dSchema, specItemSchema } from "../types";
+import { colorOptionSchema, specItemSchema } from "../types";
 
 export const slugSchema = z
   .string()
@@ -30,9 +30,16 @@ export const productInputSchema = z
     storageOptions: z.array(z.string().trim().min(1).max(30)).max(12).default([]),
     colors: z.array(colorOptionSchema).max(16).default([]),
     specs: z.array(specItemSchema).max(60).default([]),
-    model3d: model3dSchema,
-    modelAssetId: idSchema.nullable().default(null),
-    imageAssetIds: z.array(idSchema).max(20).default([]),
+    /** photos in display order; `color` = HEX of the colour shown (null = all colours) */
+    images: z
+      .array(
+        z.object({
+          assetId: idSchema,
+          color: z.string().trim().toLowerCase().regex(/^#[0-9a-f]{6}$/).nullable().default(null),
+        }),
+      )
+      .max(40)
+      .default([]),
   })
   .refine((v) => v.specialPrice === null || v.specialPrice === 0 || v.specialPrice < v.price, {
     message: "Специальная цена должна быть ниже обычной",
