@@ -17,6 +17,18 @@ export const brands = [
   { slug: "honor", name: "Honor", sortOrder: 60 },
 ];
 
+export type UsedSeed = {
+  currency: "UZS" | "USD";
+  batteryHealth?: number;
+  batteryCycles?: number;
+  hasBox?: boolean;
+  region?: string;
+  noteRu?: string;
+  noteUz?: string;
+  /** installment terms for this unit, as published in the store's channel */
+  offers?: { down: number; months: number; monthly: number }[];
+};
+
 type Seed = {
   slug: string;
   brand: string;
@@ -43,6 +55,8 @@ type Seed = {
   previousColors?: ColorOption[][];
   /** Products without real photos are created hidden — publish them after uploading photos in the admin. */
   hidden?: boolean;
+  /** A used unit on sale (one particular phone). Live photo files start with "live-". */
+  used?: UsedSeed;
 };
 
 const s = (labelRu: string, labelUz: string, valueRu: string, valueUz = valueRu): SpecItem => ({ labelRu, labelUz, valueRu, valueUz });
@@ -594,4 +608,198 @@ export const products: Seed[] = [
     daysAgo: 80,
     hidden: true,
   },
+];
+
+
+/* ------------------------------------------------------------------------------------------ */
+/* Used phones currently on sale (from the store's Telegram channel). Prices in USD unless noted. */
+
+const SPEC_17_PRO_MAX = [
+  s("Экран", "Ekran", '6,9" Super Retina XDR, ProMotion 120 Гц', '6,9" Super Retina XDR, ProMotion 120 Hz'),
+  s("Процессор", "Protsessor", "Apple A19 Pro"),
+  s("Основная камера", "Asosiy kamera", "48 + 48 + 48 Мп, оптический зум 8×", "48 + 48 + 48 MP, 8x optik zum"),
+  s("Фронтальная камера", "Old kamera", "18 Мп Center Stage", "18 MP Center Stage"),
+];
+const SPEC_16_PRO_MAX = [
+  s("Экран", "Ekran", '6,9" Super Retina XDR, ProMotion 120 Гц', '6,9" Super Retina XDR, ProMotion 120 Hz'),
+  s("Процессор", "Protsessor", "Apple A18 Pro"),
+  s("Основная камера", "Asosiy kamera", "48 + 48 + 12 Мп, оптический зум 5×", "48 + 48 + 12 MP, 5x optik zum"),
+];
+const SPEC_16_PRO = [
+  s("Экран", "Ekran", '6,3" Super Retina XDR, ProMotion 120 Гц', '6,3" Super Retina XDR, ProMotion 120 Hz'),
+  s("Процессор", "Protsessor", "Apple A18 Pro"),
+  s("Основная камера", "Asosiy kamera", "48 + 48 + 12 Мп, оптический зум 5×", "48 + 48 + 12 MP, 5x optik zum"),
+];
+const SPEC_16 = [
+  s("Экран", "Ekran", '6,1" Super Retina XDR'),
+  s("Процессор", "Protsessor", "Apple A18"),
+  s("Основная камера", "Asosiy kamera", "48 + 12 Мп", "48 + 12 MP"),
+];
+const SPEC_14_PRO_MAX = [
+  s("Экран", "Ekran", '6,7" Super Retina XDR, ProMotion 120 Гц', '6,7" Super Retina XDR, ProMotion 120 Hz'),
+  s("Процессор", "Protsessor", "Apple A16 Bionic"),
+  s("Основная камера", "Asosiy kamera", "48 + 12 + 12 Мп, оптический зум 3×", "48 + 12 + 12 MP, 3x optik zum"),
+];
+const SPEC_12_PRO = [
+  s("Экран", "Ekran", '6,1" Super Retina XDR'),
+  s("Процессор", "Protsessor", "Apple A14 Bionic"),
+  s("Основная камера", "Asosiy kamera", "12 + 12 + 12 Мп, LiDAR", "12 + 12 + 12 MP, LiDAR"),
+];
+const SPEC_A17 = [
+  s("Экран", "Ekran", '6,7" Super AMOLED, 90 Гц', '6,7" Super AMOLED, 90 Hz'),
+  s("Основная камера", "Asosiy kamera", "50 Мп", "50 MP"),
+  s("Аккумулятор", "Batareya", "5000 мА·ч", "5000 mA·soat"),
+];
+
+const DEEP_BLUE = c("Глубокий синий", "To‘q ko‘k", "#2d3a56");
+const SILVER = c("Серебристый", "Kumushrang", "#dcdcdf");
+
+const used = (
+  slug: string,
+  brand: string,
+  nameRu: string,
+  storage: string,
+  color: ColorOption,
+  price: number,
+  specs: SpecItem[],
+  u: UsedSeed,
+  photos: string[],
+  daysAgo: number,
+  inStock = true,
+): Seed => ({
+  slug,
+  brand,
+  category: "smartfony",
+  nameRu,
+  descriptionRu: "",
+  descriptionUz: "",
+  price,
+  inStock,
+  isFeatured: inStock,
+  storage: [storage],
+  colors: [color],
+  specs,
+  daysAgo,
+  photos: photos.map((file) => ({ file, color: 0 })),
+  used: u,
+});
+
+export const listings: Seed[] = [
+  used(
+    "iphone-17-pro-max-256-deep-blue-1190",
+    "apple",
+    "Apple iPhone 17 Pro Max 256 GB",
+    "256 GB",
+    DEEP_BLUE,
+    1190,
+    SPEC_17_PRO_MAX,
+    { currency: "USD", batteryHealth: 97, hasBox: true, region: "AF/A (SIM + eSIM)", offers: [{ down: 600, months: 3, monthly: 236 }, { down: 600, months: 6, monthly: 138 }] },
+    ["live-iphone-17-pro-max-deep-blue-1190"],
+    0,
+  ),
+  used(
+    "iphone-17-pro-max-256-silver-1330",
+    "apple",
+    "Apple iPhone 17 Pro Max 256 GB",
+    "256 GB",
+    SILVER,
+    1330,
+    SPEC_17_PRO_MAX,
+    { currency: "USD", batteryHealth: 99, batteryCycles: 125, hasBox: true, region: "AF/A", offers: [{ down: 600, months: 3, monthly: 295 }, { down: 600, months: 6, monthly: 175 }] },
+    ["live-iphone-17-pro-max-silver-1330", "iphone-17-pro-white-side", "iphone-17-pro-white-camera"],
+    1,
+  ),
+  used(
+    "iphone-17-pro-max-256-silver-1290",
+    "apple",
+    "Apple iPhone 17 Pro Max 256 GB",
+    "256 GB",
+    SILVER,
+    1290,
+    SPEC_17_PRO_MAX,
+    { currency: "USD", batteryHealth: 96, hasBox: true, region: "ZA/A", offers: [{ down: 550, months: 3, monthly: 299 }, { down: 250, months: 6, monthly: 175 }] },
+    ["live-iphone-17-pro-max-silver-1290", "iphone-17-pro-white-side", "iphone-17-pro-white-camera"],
+    2,
+  ),
+  used(
+    "iphone-16-pro-max-256-black-890",
+    "apple",
+    "Apple iPhone 16 Pro Max 256 GB",
+    "256 GB",
+    c("Чёрный титан", "Qora titan", "#3c3c3e"),
+    890,
+    SPEC_16_PRO_MAX,
+    { currency: "USD", batteryHealth: 89, hasBox: true, region: "VC/A", offers: [{ down: 400, months: 3, monthly: 199 }, { down: 400, months: 6, monthly: 115 }] },
+    ["live-iphone-16-pro-max-black-890"],
+    3,
+  ),
+  used(
+    "iphone-16-pro-128-desert-780",
+    "apple",
+    "Apple iPhone 16 Pro 128 GB",
+    "128 GB",
+    c("Пустынный титан", "Sahro titani", "#c8b09a"),
+    780,
+    SPEC_16_PRO,
+    { currency: "USD", batteryHealth: 89, hasBox: true, region: "X/A", offers: [{ down: 350, months: 3, monthly: 175 }, { down: 350, months: 6, monthly: 101 }] },
+    ["live-iphone-16-pro-desert-780"],
+    4,
+  ),
+  used(
+    "iphone-16-128-black-680",
+    "apple",
+    "Apple iPhone 16 128 GB",
+    "128 GB",
+    c("Чёрный", "Qora", "#232325"),
+    680,
+    SPEC_16,
+    { currency: "USD", batteryHealth: 92, hasBox: true, region: "ZD/A", offers: [{ down: 300, months: 3, monthly: 155 }, { down: 300, months: 6, monthly: 89 }] },
+    ["live-iphone-16-black-680"],
+    5,
+  ),
+  used(
+    "iphone-14-pro-max-128-purple-530",
+    "apple",
+    "Apple iPhone 14 Pro Max 128 GB",
+    "128 GB",
+    c("Тёмно-фиолетовый", "To‘q binafsha", "#4b3f5c"),
+    530,
+    SPEC_14_PRO_MAX,
+    { currency: "USD", batteryHealth: 77, hasBox: true, region: "ZP/A", offers: [{ down: 250, months: 3, monthly: 115 }, { down: 250, months: 6, monthly: 66 }] },
+    ["live-iphone-14-pro-max-purple-530", "iphone-14-pro-purple-side", "iphone-14-pro-purple-camera"],
+    6,
+  ),
+  used(
+    "iphone-12-pro-128-pacific-blue-330",
+    "apple",
+    "Apple iPhone 12 Pro 128 GB",
+    "128 GB",
+    c("Тихоокеанский синий", "Tinch okeani ko‘k", "#2f4f64"),
+    330,
+    SPEC_12_PRO,
+    {
+      currency: "USD",
+      batteryHealth: 75,
+      hasBox: true,
+      region: "LL/A",
+      noteRu: "Почти идеальное",
+      noteUz: "Deyarli ideal",
+      offers: [{ down: 200, months: 3, monthly: 55 }],
+    },
+    ["live-iphone-12-pro-pacific-blue-330"],
+    7,
+  ),
+  used(
+    "samsung-galaxy-a17-128-black",
+    "samsung",
+    "Samsung Galaxy A17 6/128 GB",
+    "6/128 GB",
+    c("Чёрный", "Qora", "#1f1f21"),
+    1_950_000,
+    SPEC_A17,
+    { currency: "UZS", hasBox: true, region: "Вьетнам", noteRu: "Хорошее", noteUz: "Yaxshi" },
+    ["live-galaxy-a17-black"],
+    8,
+    false, // sold
+  ),
 ];

@@ -22,6 +22,16 @@ export type ProductFormValue = {
   price: string;
   /** price per storage option (empty = base price) */
   storagePrices: Record<string, string>;
+  currency: "UZS" | "USD";
+  condition: "new" | "used";
+  batteryHealth: string;
+  batteryCycles: string;
+  hasBox: "" | "yes" | "no";
+  region: string;
+  conditionNoteRu: string;
+  conditionNoteUz: string;
+  /** this unit's own installment terms */
+  installmentOffers: { down: string; months: string; monthly: string }[];
   inStock: boolean;
   isHidden: boolean;
   isFeatured: boolean;
@@ -30,7 +40,7 @@ export type ProductFormValue = {
   colors: ColorOption[];
   specs: SpecItem[];
   /** photos in display order; color = HEX of the product colour shown (null = all colours) */
-  images: { id: string; url: string; color: string | null }[];
+  images: { id: string; url: string; color: string | null; style: "studio" | "photo" }[];
 };
 
 const SPEC_TEMPLATE: SpecItem[] = [
@@ -79,7 +89,7 @@ export default function ProductForm({
       for (const [i, f] of Array.from(files).entries()) {
         setUploading(`Фото ${i + 1}/${files.length}: 0%`);
         const a = await uploadFile(f, "image", (p) => setUploading(`Фото ${i + 1}/${files.length}: ${Math.round(p * 100)}%`));
-        setV((s) => ({ ...s, images: [...s.images, { id: a.id, url: a.url, color: uploadColor || null }] }));
+        setV((s) => ({ ...s, images: [...s.images, { id: a.id, url: a.url, color: uploadColor || null, style: "studio" as const }] }));
       }
     } catch (e) {
       setResult({ tone: "error", text: (e as Error).message });
@@ -126,6 +136,17 @@ export default function ProductForm({
         storagePrices: Object.fromEntries(
           v.storageOptions.map((o) => [o, (v.storagePrices[o] ?? "").replace(/\s/g, "")] as const).filter(([, n]) => n),
         ),
+        currency: v.currency,
+        condition: v.condition,
+        batteryHealth: v.batteryHealth.trim() ? v.batteryHealth.trim() : null,
+        batteryCycles: v.batteryCycles.trim() ? v.batteryCycles.trim() : null,
+        hasBox: v.hasBox === "" ? null : v.hasBox === "yes",
+        region: v.region,
+        conditionNoteRu: v.conditionNoteRu,
+        conditionNoteUz: v.conditionNoteUz,
+        installmentOffers: v.installmentOffers
+          .filter((o) => o.months.trim() && o.monthly.trim())
+          .map((o) => ({ down: o.down.replace(/\s/g, "") || "0", months: o.months.trim(), monthly: o.monthly.replace(/\s/g, "") })),
         inStock: v.inStock,
         isHidden: v.isHidden,
         isFeatured: v.isFeatured,
@@ -133,7 +154,7 @@ export default function ProductForm({
         storageOptions: v.storageOptions,
         colors: v.colors,
         specs: v.specs.filter((s) => s.valueRu.trim()),
-        images: v.images.map((i) => ({ assetId: i.id, color: i.color })),
+        images: v.images.map((i) => ({ assetId: i.id, color: i.color, style: i.style })),
       };
       const r = await saveProductAction(payload);
       if (!r.ok) {
@@ -214,9 +235,15 @@ export default function ProductForm({
           </Card>
 
           <Card title="Цена и наличие">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Цена, сум *" hint="Базовая цена. Для разных объёмов памяти цены задаются ниже, в «Варианты памяти»" error={err("price")}>
+            <div className="grid gap-4 sm:grid-cols-[1fr_8rem_1fr]">
+              <Field label={`Цена, ${v.currency === "USD" ? "$" : "сум"} *`} hint="Базовая цена. Для разных объёмов памяти цены задаются ниже, в «Варианты памяти»" error={err("price")}>
                 <Input inputMode="numeric" value={v.price} onChange={(e) => set("price", e.target.value.replace(/[^\d\s]/g, ""))} aria-invalid={!!err("price")} />
+              </Field>
+              <Field label="Валюта">
+                <Select value={v.currency} onChange={(e) => set("currency", e.target.value === "USD" ? "USD" : "UZS")}>
+                  <option value="UZS">сум</option>
+                  <option value="USD">$ USD</option>
+                </Select>
               </Field>
               <Field label="Порядок сортировки" hint="Меньше — выше в каталоге">
                 <Input inputMode="numeric" value={v.sortOrder} onChange={(e) => set("sortOrder", e.target.value.replace(/[^\d-]/g, ""))} />
@@ -226,6 +253,82 @@ export default function ProductForm({
               <Toggle label="В наличии" description="Статус на сайте" checked={v.inStock} onChange={(x) => set("inStock", x)} />
               <Toggle label="Скрыть с сайта" description="Без удаления" checked={v.isHidden} onChange={(x) => set("isHidden", x)} />
               <Toggle label="Хит / новинка" description="Показ на главной" checked={v.isFeatured} onChange={(x) => set("isFeatured", x)} />
+            </div>
+          </Card>
+
+          <Card title="Состояние и рассрочка аппарата">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Состояние">
+                <Select value={v.condition} onChange={(e) => set("condition", e.target.value === "used" ? "used" : "new")}>
+                  <option value="new">Новый</option>
+                  <option value="used">Б/у</option>
+                </Select>
+              </Field>
+              {v.condition === "used" && (
+                <>
+                  <Field label="Ёмкость аккумулятора, %" error={err("batteryHealth")}>
+                    <Input inputMode="numeric" value={v.batteryHealth} onChange={(e) => set("batteryHealth", e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="97" />
+                  </Field>
+                  <Field label="Циклы зарядки" hint="Необязательно" error={err("batteryCycles")}>
+                    <Input inputMode="numeric" value={v.batteryCycles} onChange={(e) => set("batteryCycles", e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="125" />
+                  </Field>
+                  <Field label="Коробка">
+                    <Select value={v.hasBox} onChange={(e) => set("hasBox", e.target.value as ProductFormValue["hasBox"])}>
+                      <option value="">Не указано</option>
+                      <option value="yes">Есть</option>
+                      <option value="no">Нет</option>
+                    </Select>
+                  </Field>
+                  <Field label="Регион / модель" hint="Например: AF/A (SIM + eSIM)">
+                    <Input value={v.region} maxLength={60} onChange={(e) => set("region", e.target.value)} placeholder="LL/A" />
+                  </Field>
+                  <div />
+                  <Field label="Комментарий о состоянии (RU)">
+                    <Input value={v.conditionNoteRu} maxLength={200} onChange={(e) => set("conditionNoteRu", e.target.value)} placeholder="Почти идеальное" />
+                  </Field>
+                  <Field label="Комментарий о состоянии (UZ)">
+                    <Input value={v.conditionNoteUz} maxLength={200} onChange={(e) => set("conditionNoteUz", e.target.value)} placeholder="Deyarli ideal" />
+                  </Field>
+                </>
+              )}
+            </div>
+
+            <div className="mt-6 border-t border-white/[0.06] pt-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Рассрочка для этого аппарата</p>
+                  <p className="text-xs text-white/40">Как в посте: первый взнос и ежемесячный платёж ({v.currency === "USD" ? "$" : "сум"}). Если пусто — работает общий калькулятор.</p>
+                </div>
+                <Button
+                  size="sm"
+                  type="button"
+                  disabled={v.installmentOffers.length >= 6}
+                  onClick={() => set("installmentOffers", [...v.installmentOffers, { down: "", months: v.installmentOffers.length ? "6" : "3", monthly: "" }])}
+                >
+                  + Вариант
+                </Button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {v.installmentOffers.map((o, i) => {
+                  const upd = (patch: Partial<typeof o>) => set("installmentOffers", v.installmentOffers.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+                  return (
+                    <div key={i} className="grid grid-cols-[1fr_5.5rem_1fr_auto] items-end gap-2">
+                      <Field label={i === 0 ? "Первый взнос" : ""}>
+                        <Input inputMode="numeric" value={o.down} onChange={(e) => upd({ down: e.target.value.replace(/[^\d\s]/g, "") })} placeholder="600" aria-label="Первый взнос" />
+                      </Field>
+                      <Field label={i === 0 ? "Месяцев" : ""}>
+                        <Input inputMode="numeric" value={o.months} onChange={(e) => upd({ months: e.target.value.replace(/\D/g, "").slice(0, 2) })} aria-label="Месяцев" />
+                      </Field>
+                      <Field label={i === 0 ? "В месяц" : ""}>
+                        <Input inputMode="numeric" value={o.monthly} onChange={(e) => upd({ monthly: e.target.value.replace(/[^\d\s]/g, "") })} placeholder="236" aria-label="Платёж в месяц" />
+                      </Field>
+                      <Button size="sm" variant="danger" type="button" onClick={() => set("installmentOffers", v.installmentOffers.filter((_, j) => j !== i))} aria-label="Удалить вариант">
+                        ×
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </Card>
 
@@ -387,7 +490,7 @@ export default function ProductForm({
             {v.images.length ? (
               <>
                 <p className="mb-4 text-xs text-white/40">
-                  Привяжите каждое фото к цвету: на странице товара при выборе цвета показываются только его фото (и фото «для всех цветов»). Первое фото — обложка в каталоге.
+                  Привяжите каждое фото к цвету: на странице товара при выборе цвета показываются только его фото (и фото «для всех цветов»). Первое фото — обложка в каталоге. Для б/у аппарата первым поставьте живое фото, за ним — фото той же модели на белом фоне.
                 </p>
                 <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                   {v.images.map((img, i) => {
@@ -395,7 +498,7 @@ export default function ProductForm({
                     return (
                       <li key={img.id} className="group relative overflow-hidden rounded-2xl bg-graphite-850 ring-1 ring-white/[0.08]">
                         <div className="relative aspect-[4/5] bg-white">
-                          <Image src={img.url} alt="" fill sizes="220px" className="object-contain" />
+                          <Image src={img.url} alt="" fill sizes="220px" className={img.style === "photo" ? "object-cover" : "object-contain"} />
                         </div>
                         {i === 0 && <span className="absolute left-2 top-2"><Badge tone="neutral">Обложка</Badge></span>}
                         <div className="flex flex-col gap-1.5 border-t border-white/[0.06] p-1.5">
@@ -413,6 +516,15 @@ export default function ProductForm({
                               ))}
                             </Select>
                           </div>
+                          <Select
+                            value={img.style}
+                            onChange={(e) => set("images", v.images.map((x) => (x.id === img.id ? { ...x, style: e.target.value === "photo" ? "photo" : "studio" } : x)))}
+                            className="!h-8 !px-2 !pr-7 text-xs"
+                            aria-label="Тип фото"
+                          >
+                            <option value="studio">На белом фоне</option>
+                            <option value="photo">Живое фото (во весь кадр)</option>
+                          </Select>
                           <div className="flex justify-between gap-1">
                             <div className="flex gap-1">
                               <Button size="sm" type="button" onClick={() => moveImage(i, -1)} disabled={i === 0} aria-label="Влево">←</Button>

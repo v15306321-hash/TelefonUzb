@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "../db";
 import { assetUrl } from "../storage";
-import { parseColors, parseSpecs, parseStoragePrices } from "../types";
+import { parseColors, parseInstallmentOffers, parseSpecs, parseStoragePrices } from "../types";
 import type { ProductFormValue } from "@/components/admin/ProductForm";
 
 export async function loadFormOptions() {
@@ -29,6 +29,15 @@ export async function loadProductForm(id: string): Promise<ProductFormValue | nu
     categoryId: p.categoryId,
     price: String(p.price),
     storagePrices: Object.fromEntries(Object.entries(parseStoragePrices(p.storagePrices, p.storageOptions)).map(([k, n]) => [k, String(n)])),
+    currency: p.currency === "USD" ? "USD" : "UZS",
+    condition: p.condition === "used" ? "used" : "new",
+    batteryHealth: p.batteryHealth != null ? String(p.batteryHealth) : "",
+    batteryCycles: p.batteryCycles != null ? String(p.batteryCycles) : "",
+    hasBox: p.hasBox == null ? "" : p.hasBox ? "yes" : "no",
+    region: p.region,
+    conditionNoteRu: p.conditionNoteRu,
+    conditionNoteUz: p.conditionNoteUz,
+    installmentOffers: parseInstallmentOffers(p.installmentOffers).map((o) => ({ down: String(o.down), months: String(o.months), monthly: String(o.monthly) })),
     inStock: p.inStock,
     isHidden: p.isHidden,
     isFeatured: p.isFeatured,
@@ -36,7 +45,7 @@ export async function loadProductForm(id: string): Promise<ProductFormValue | nu
     storageOptions: p.storageOptions,
     colors: parseColors(p.colors),
     specs: parseSpecs(p.specs),
-    images: p.images.map((i) => ({ id: i.assetId, url: assetUrl(i.assetId)!, color: i.colorKey?.toLowerCase() ?? null })),
+    images: p.images.map((i) => ({ id: i.assetId, url: assetUrl(i.assetId)!, color: i.colorKey?.toLowerCase() ?? null, style: i.style === "photo" ? "photo" : "studio" })),
   };
 }
 
@@ -50,6 +59,15 @@ export const emptyProductForm = (brandId = "", categoryId = ""): ProductFormValu
   categoryId,
   price: "",
   storagePrices: {},
+  currency: "UZS",
+  condition: "new",
+  batteryHealth: "",
+  batteryCycles: "",
+  hasBox: "",
+  region: "",
+  conditionNoteRu: "",
+  conditionNoteUz: "",
+  installmentOffers: [],
   inStock: true,
   isHidden: false,
   isFeatured: false,

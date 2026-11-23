@@ -55,8 +55,23 @@ model Product {
   nameUz        String         @default("")
   descriptionRu String         @default("")
   descriptionUz String         @default("")
-  /// Цена в сумах (UZS)
+  /// Цена в валюте currency (сумы или доллары)
   price         Int
+  /// "UZS" | "USD"
+  currency      String         @default("UZS")
+  /// "new" | "used"
+  condition     String         @default("new")
+  /// Б/у: ёмкость аккумулятора, %, и число циклов
+  batteryHealth Int?
+  batteryCycles Int?
+  /// Б/у: есть ли коробка (null — не указано)
+  hasBox        Boolean?
+  /// Б/у: регион / модель, например "AF/A (SIM + eSIM)"
+  region        String         @default("")
+  conditionNoteRu String       @default("")
+  conditionNoteUz String       @default("")
+  /// Рассрочка именно для этого аппарата: [{ down, months, monthly }] в валюте currency
+  installmentOffers Json       @default("[]")
   inStock       Boolean        @default(true)
   isHidden      Boolean        @default(false)
   isFeatured    Boolean        @default(false)
@@ -95,6 +110,8 @@ model ProductImage {
   sortOrder Int     @default(0)
   /// HEX of the product colour this photo shows (null = all colours)
   colorKey  String?
+  /// "studio" — product on a white background (shown whole); "photo" — live shot (fills the frame)
+  style     String  @default("studio")
 
   @@index([productId, sortOrder])
 }

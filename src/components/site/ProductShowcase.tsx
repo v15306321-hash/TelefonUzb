@@ -5,7 +5,7 @@ import type { Locale } from "@/i18n/config";
 import type { CatalogImage } from "@/lib/catalog";
 import { formatPrice } from "@/lib/localize";
 import { telegramTopic } from "@/lib/telegram";
-import type { InstallmentPlan } from "@/lib/types";
+import type { Currency, InstallmentOffer, InstallmentPlan } from "@/lib/types";
 import InstallmentCalculator, { monthlyPayment, type InstallmentLabels } from "./InstallmentCalculator";
 import ProductGallery from "./ProductGallery";
 
@@ -30,6 +30,7 @@ export default function ProductShowcase({
   storageOptions,
   storagePrices,
   basePrice,
+  currency = "UZS",
   locale,
   installment,
   labels,
@@ -45,8 +46,10 @@ export default function ProductShowcase({
   /** price for every storage option */
   storagePrices: Record<string, number>;
   basePrice: number;
+  currency?: Currency;
   locale: Locale;
-  installment: { plans: InstallmentPlan[]; phone?: string; labels: InstallmentLabels } | null;
+  /** plans: site-wide calculator (empty when switched off); offers: this unit's own terms */
+  installment: { plans: InstallmentPlan[]; offers: InstallmentOffer[]; phone?: string; labels: InstallmentLabels } | null;
   labels: Labels;
   header: ReactNode;
   stock: ReactNode;
@@ -62,11 +65,16 @@ export default function ProductShowcase({
 
   // the Telegram button sends the selected configuration
   useEffect(() => {
-    telegramTopic.set([name, storage, colorName].filter(Boolean).join(", "));
-  }, [name, storage, colorName]);
+    telegramTopic.set([name, storage, colorName, formatPrice(price, locale, currency)].filter(Boolean).join(", "));
+  }, [name, storage, colorName, price, locale, currency]);
   useEffect(() => () => telegramTopic.set(null), []);
 
-  const lowestMonthly = installment?.plans.length ? Math.min(...installment.plans.map((pl) => monthlyPayment(price, pl))) : null;
+  const lowestMonthly = installment?.offers.length
+    ? Math.min(...installment.offers.map((o) => o.monthly))
+    : installment?.plans.length
+      ? Math.min(...installment.plans.map((pl) => monthlyPayment(price, pl, currency)))
+      : null;
+  const showInstallment = !!installment && (installment.offers.length > 0 || installment.plans.length > 0);
 
   // photos of the selected colour (+ photos valid for every colour); all photos if none are linked
   const shown = useMemo(() => {
@@ -90,9 +98,9 @@ export default function ProductShowcase({
         {header}
         <div className="mt-6 animate-fade-up [animation-delay:80ms]">
           <p className="text-3xl font-semibold tracking-tight tabular-nums" aria-live="polite">
-            {formatPrice(price, locale)}
+            {formatPrice(price, locale, currency)}
           </p>
-          {lowestMonthly && <p className="mt-1.5 text-sm text-white/50">{labels.installmentShort.replace("{price}", formatPrice(lowestMonthly, locale))}</p>}
+          {lowestMonthly && <p className="mt-1.5 text-sm text-white/50">{labels.installmentShort.replace("{price}", formatPrice(lowestMonthly, locale, currency))}</p>}
         </div>
         {stock}
 
@@ -131,7 +139,7 @@ export default function ProductShowcase({
                   <input type="radio" name="storage" className="peer sr-only" checked={s === storage} onChange={() => setStorage(s)} />
                   <span className="block rounded-2xl border border-white/12 px-5 py-3 text-sm font-medium text-white/75 transition peer-checked:border-white peer-checked:bg-white peer-checked:text-black peer-focus-visible:ring-2 peer-focus-visible:ring-signal-bright hover:border-white/35">
                     {s}
-                    {priceVaries && <span className="mt-0.5 block text-[0.72rem] font-normal tabular-nums opacity-60">{formatPrice(storagePrices[s] ?? basePrice, locale)}</span>}
+                    {priceVaries && <span className="mt-0.5 block text-[0.72rem] font-normal tabular-nums opacity-60">{formatPrice(storagePrices[s] ?? basePrice, locale, currency)}</span>}
                   </span>
                 </label>
               ))}
@@ -139,8 +147,16 @@ export default function ProductShowcase({
           </fieldset>
         )}
 
-        {installment && installment.plans.length > 0 && (
-          <InstallmentCalculator price={price} plans={installment.plans} locale={locale} phone={installment.phone} labels={installment.labels} />
+        {showInstallment && installment && (
+          <InstallmentCalculator
+            price={price}
+            plans={installment.plans}
+            offers={installment.offers}
+            currency={currency}
+            locale={locale}
+            phone={installment.phone}
+            labels={installment.labels}
+          />
         )}
         {actions}
         {children}

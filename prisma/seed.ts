@@ -8,7 +8,7 @@ import path from "node:path";
 import { createPrisma } from "../src/lib/prisma-factory";
 import bcrypt from "bcryptjs";
 import sharp from "sharp";
-import { brands, categories, products } from "./seed-data";
+import { brands, categories, listings, products } from "./seed-data";
 import { defaultSiteContent } from "../src/lib/types";
 
 const prisma = createPrisma();
@@ -46,9 +46,10 @@ async function main() {
   const catId = Object.fromEntries((await prisma.category.findMany()).map((c) => [c.slug, c.id]));
   const brandId = Object.fromEntries((await prisma.brand.findMany()).map((b) => [b.slug, b.id]));
 
-  // --- products ---
+  // --- products (used listings first: they are what the store sells now) ---
   let created = 0;
-  for (const [i, p] of products.entries()) {
+  const all = [...listings.map((p, i) => ({ p, order: -1000 + i * 10 })), ...products.map((p, i) => ({ p, order: i * 10 }))];
+  for (const { p, order } of all) {
     let product = await prisma.product.findUnique({ where: { slug: p.slug }, include: { images: true } });
     if (!product) {
       product = await prisma.product.create({
@@ -62,7 +63,20 @@ async function main() {
           inStock: p.inStock ?? true,
           isHidden: p.hidden ?? false,
           isFeatured: p.isFeatured ?? false,
-          sortOrder: i * 10,
+          sortOrder: order,
+          ...(p.used
+            ? {
+                condition: "used",
+                currency: p.used.currency,
+                batteryHealth: p.used.batteryHealth ?? null,
+                batteryCycles: p.used.batteryCycles ?? null,
+                hasBox: p.used.hasBox ?? null,
+                region: p.used.region ?? "",
+                conditionNoteRu: p.used.noteRu ?? "",
+                conditionNoteUz: p.used.noteUz ?? p.used.noteRu ?? "",
+                installmentOffers: p.used.offers ?? [],
+              }
+            : {}),
           storageOptions: p.storage,
           colors: p.colors,
           specs: p.specs,
@@ -87,7 +101,15 @@ async function main() {
     await retirePhotos(product.id, p.slug, p.retiredPhotos ?? []);
     await syncPhotos(product.id, p.slug, p.photos ?? [], p.colors.map((c) => c.hex.toLowerCase()));
   }
-  console.log(`✓ products: ${created} created, ${products.length - created} already existed`);
+  console.log(`✓ products: ${created} created, ${all.length - created} already existed`);
+
+  // one-time: the store now sells used phones — the demo catalog of new models (with sample prices) is hidden.
+  // The admin can publish any of them again with the "Скрыть с сайта" switch.
+  if (!(await prisma.activityLog.findFirst({ where: { action: "seed-used-catalog" } }))) {
+    const r = await prisma.product.updateMany({ where: { slug: { in: products.map((p) => p.slug) }, isHidden: false }, data: { isHidden: true, isFeatured: false } });
+    await prisma.activityLog.create({ data: { action: "seed-used-catalog", entity: "catalog", summary: `Каталог переведён на б/у аппараты; скрыто демо-моделей: ${r.count}` } });
+    console.log(`  ~ demo catalog hidden (${r.count})`);
+  }
 
   // --- settings ---
   await prisma.siteSettings.upsert({ where: { id: 1 }, create: { id: 1, content: defaultSiteContent }, update: {} });
@@ -138,7 +160,7 @@ async function syncPhotos(productId: string, slug: string, photos: NonNullable<(
     const asset = await prisma.asset.create({
       data: { filename, mimeType: "image/webp", size: buf.length, driver: "db", data: new Uint8Array(buf), width: meta.width ?? null, height: meta.height ?? null },
     });
-    await prisma.productImage.create({ data: { productId, assetId: asset.id, sortOrder: order++, colorKey } });
+    await prisma.productImage.create({ data: { productId, assetId: asset.id, sortOrder: order++, colorKey, style: file.startsWith("live-") ? "photo" : "studio" } });
     await prisma.activityLog.create({ data: { action: "seed-photo", entity: "product", entityId: productId, summary: marker } });
     added++;
   }

@@ -134,7 +134,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: SP 
                     </td>
                     <td className="px-3 py-3 text-white/60">{p.category.nameRu}</td>
                     <td className="px-3 py-3 tabular-nums">
-                      {formatPrice(p.price, "ru")}
+                      {formatPrice(p.price, "ru", p.currency === "USD" ? "USD" : "UZS")}
                       {Object.keys((p.storagePrices as object) ?? {}).length > 0 && <span className="block text-xs text-white/40">по объёмам</span>}
                     </td>
                     <ProductRowActions id={p.id} slug={p.slug} name={p.nameRu} inStock={p.inStock} isHidden={p.isHidden} />

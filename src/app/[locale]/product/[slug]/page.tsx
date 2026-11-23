@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const name = pick(locale, p.nameRu, p.nameUz);
   const description = t(dict.meta.productDescription, {
     name,
-    price: p.priceVaries ? t(dict.product.priceFrom, { price: formatPrice(p.price, locale) }) : formatPrice(p.price, locale),
+    price: p.priceVaries ? t(dict.product.priceFrom, { price: formatPrice(p.price, locale, p.currency) }) : formatPrice(p.price, locale, p.currency),
     availability: p.inStock ? dict.product.inStock : dict.product.outOfStock,
   });
   return {
@@ -66,18 +66,20 @@ export default async function ProductPage({ params }: Props) {
     offers: p.priceVaries
       ? {
           "@type": "AggregateOffer",
-          priceCurrency: "UZS",
+          priceCurrency: p.currency,
           lowPrice: p.price,
           highPrice: Math.max(...Object.values(p.storagePrices)),
           offerCount: p.storageOptions.length,
-          availability: p.inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+          availability: p.inStock ? "https://schema.org/InStock" : p.condition.used ? "https://schema.org/SoldOut" : "https://schema.org/OutOfStock",
+          itemCondition: p.condition.used ? "https://schema.org/UsedCondition" : "https://schema.org/NewCondition",
           url: `${SITE_URL}/${locale}/product/${p.slug}`,
         }
       : {
           "@type": "Offer",
-          priceCurrency: "UZS",
+          priceCurrency: p.currency,
           price: p.price,
-          availability: p.inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+          availability: p.inStock ? "https://schema.org/InStock" : p.condition.used ? "https://schema.org/SoldOut" : "https://schema.org/OutOfStock",
+          itemCondition: p.condition.used ? "https://schema.org/UsedCondition" : "https://schema.org/NewCondition",
           url: `${SITE_URL}/${locale}/product/${p.slug}`,
         },
   };
@@ -100,10 +102,12 @@ export default async function ProductPage({ params }: Props) {
         storagePrices={p.storagePrices}
         basePrice={p.price}
         locale={locale}
+        currency={p.currency}
         installment={
-          content.installmentEnabled
+          content.installmentEnabled || p.installmentOffers.length
             ? {
-                plans: content.installmentPlans,
+                plans: content.installmentEnabled ? content.installmentPlans : [],
+                offers: p.installmentOffers,
                 phone: installmentPhone,
                 labels: {
                   title: dict.product.installmentTitle,
@@ -112,6 +116,8 @@ export default async function ProductPage({ params }: Props) {
                   total: dict.product.installmentTotal,
                   note: dict.product.installmentNote,
                   call: dict.product.installmentCall,
+                  down: dict.product.installmentDown,
+                  offerNote: dict.product.installmentOfferNote,
                 },
               }
             : null
@@ -138,8 +144,51 @@ export default async function ProductPage({ params }: Props) {
           <div>
             <p className={`mt-4 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm ${p.inStock ? "bg-ok/10 text-ok" : "bg-white/5 text-white/50"}`}>
               <span className={`h-2 w-2 rounded-full ${p.inStock ? "bg-ok shadow-[0_0_12px] shadow-ok" : "bg-white/30"}`} />
-              {p.inStock ? dict.product.inStock : dict.product.outOfStock}
+              {p.inStock ? dict.product.inStock : p.condition.used ? dict.product.sold : dict.product.outOfStock}
             </p>
+            {p.condition.used && (
+              <section className="mt-6 rounded-3xl bg-graphite-900 p-5 ring-1 ring-white/[0.06]" aria-labelledby="condition-title">
+                <h2 id="condition-title" className="mb-3 flex items-center gap-2 text-base font-semibold tracking-tight">
+                  {dict.product.conditionTitle}
+                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-[0.7rem] font-semibold text-white/80">{dict.product.used}</span>
+                </h2>
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                  {p.condition.batteryHealth != null && (
+                    <div>
+                      <dt className="text-white/45">{dict.product.battery}</dt>
+                      <dd className="mt-0.5 font-medium">
+                        {p.condition.batteryHealth}%
+                        {p.condition.batteryCycles != null && <span className="font-normal text-white/50"> · {dict.product.cycles.replace("{n}", String(p.condition.batteryCycles))}</span>}
+                      </dd>
+                    </div>
+                  )}
+                  {p.storageOptions[0] && (
+                    <div>
+                      <dt className="text-white/45">{dict.product.storage}</dt>
+                      <dd className="mt-0.5 font-medium">{p.storageOptions.join(" / ")}</dd>
+                    </div>
+                  )}
+                  {p.condition.hasBox != null && (
+                    <div>
+                      <dt className="text-white/45">{dict.product.box}</dt>
+                      <dd className="mt-0.5 font-medium">{p.condition.hasBox ? dict.product.boxYes : dict.product.boxNo}</dd>
+                    </div>
+                  )}
+                  {p.condition.region && (
+                    <div>
+                      <dt className="text-white/45">{dict.product.region}</dt>
+                      <dd className="mt-0.5 font-medium">{p.condition.region}</dd>
+                    </div>
+                  )}
+                  {pick(locale, p.condition.noteRu, p.condition.noteUz) && (
+                    <div className="col-span-2">
+                      <dt className="text-white/45">{dict.product.note}</dt>
+                      <dd className="mt-0.5 font-medium">{pick(locale, p.condition.noteRu, p.condition.noteUz)}</dd>
+                    </div>
+                  )}
+                </dl>
+              </section>
+            )}
           </div>
         }
         actions={
@@ -205,7 +254,7 @@ export default async function ProductPage({ params }: Props) {
           </h2>
           <div className="grid grid-cols-2 gap-3 sm:gap-5 lg:grid-cols-4">
             {related.map((r, i) => (
-              <ProductCard key={r.slug} product={r} locale={locale} labels={{ inStock: dict.product.inStock, outOfStock: dict.product.outOfStock }} revealDelay={i * 60} />
+              <ProductCard key={r.slug} product={r} locale={locale} labels={{ inStock: dict.product.inStock, outOfStock: dict.product.outOfStock, used: dict.product.used, sold: dict.product.sold, batteryShort: dict.product.batteryShort }} revealDelay={i * 60} />
             ))}
           </div>
         </section>

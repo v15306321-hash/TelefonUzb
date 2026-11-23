@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { colorOptionSchema, specItemSchema } from "../types";
+import { colorOptionSchema, installmentOfferSchema, specItemSchema } from "../types";
 
 export const slugSchema = z
   .string()
@@ -22,6 +22,15 @@ export const productInputSchema = z
     brandId: idSchema,
     categoryId: idSchema,
     price: z.coerce.number().int("Цена — целое число").min(1, "Укажите цену").max(2_000_000_000),
+    currency: z.enum(["UZS", "USD"]).default("UZS"),
+    condition: z.enum(["new", "used"]).default("new"),
+    batteryHealth: z.coerce.number().int().min(1).max(100).nullable().default(null),
+    batteryCycles: z.coerce.number().int().min(0).max(5000).nullable().default(null),
+    hasBox: z.boolean().nullable().default(null),
+    region: z.string().trim().max(60).default(""),
+    conditionNoteRu: z.string().trim().max(200).default(""),
+    conditionNoteUz: z.string().trim().max(200).default(""),
+    installmentOffers: z.array(installmentOfferSchema).max(6).default([]),
     inStock: z.boolean(),
     isHidden: z.boolean(),
     isFeatured: z.boolean(),
@@ -37,6 +46,7 @@ export const productInputSchema = z
         z.object({
           assetId: idSchema,
           color: z.string().trim().toLowerCase().regex(/^#[0-9a-f]{6}$/).nullable().default(null),
+          style: z.enum(["studio", "photo"]).default("studio"),
         }),
       )
       .max(40)

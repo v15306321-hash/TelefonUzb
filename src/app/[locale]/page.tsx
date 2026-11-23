@@ -45,7 +45,7 @@ export default async function HomePage({ params }: Params) {
     .slice(0, 8)
     .map((p) => toCard(p, locale));
   const banners = content.banners.filter((b) => b.isActive);
-  const cardLabels = { inStock: dict.product.inStock, outOfStock: dict.product.outOfStock };
+  const cardLabels = { inStock: dict.product.inStock, outOfStock: dict.product.outOfStock, used: dict.product.used, sold: dict.product.sold, batteryShort: dict.product.batteryShort };
 
   return (
     <div className="page-enter">

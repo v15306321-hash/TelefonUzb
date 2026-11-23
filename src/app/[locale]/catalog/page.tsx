@@ -80,7 +80,7 @@ export default async function CatalogPage({ params, searchParams }: Props) {
       {list.length ? (
         <div className="catalog-grid grid grid-cols-2 gap-3 transition-opacity duration-300 sm:gap-5 md:grid-cols-3 xl:grid-cols-4">
           {list.map((p, i) => (
-            <ProductCard key={p.slug} product={p} locale={locale} priority={i < 4} labels={{ inStock: dict.product.inStock, outOfStock: dict.product.outOfStock }} revealDelay={(i % 4) * 60} />
+            <ProductCard key={p.slug} product={p} locale={locale} priority={i < 4} labels={{ inStock: dict.product.inStock, outOfStock: dict.product.outOfStock, used: dict.product.used, sold: dict.product.sold, batteryShort: dict.product.batteryShort }} revealDelay={(i % 4) * 60} />
           ))}
         </div>
       ) : (

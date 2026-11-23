@@ -16,8 +16,9 @@ export function pickField<T extends Record<string, unknown>>(locale: Locale, obj
   return pick(locale, typeof ru === "string" ? ru : "", typeof uz === "string" ? uz : "");
 }
 
-export function formatPrice(value: number, locale: Locale): string {
+export function formatPrice(value: number, locale: Locale, currency: "UZS" | "USD" = "UZS"): string {
   const n = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(value).replace(/ | /g, " ");
+  if (currency === "USD") return `${n} $`;
   return locale === "uz" ? `${n} so‘m` : `${n} сум`;
 }
 

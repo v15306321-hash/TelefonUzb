@@ -80,7 +80,7 @@ export default function ProductGallery({ images, alt, labels }: { images: Catalo
                 fill
                 priority={i === 0}
                 sizes="(max-width: 1024px) 100vw, 55vw"
-                className="object-contain"
+                className={img.style === "photo" ? "object-cover" : "object-contain"}
                 draggable={false}
               />
             </button>
@@ -114,7 +114,7 @@ export default function ProductGallery({ images, alt, labels }: { images: Catalo
               }`}
               aria-label={`${labels.photos} ${i + 1}`}
             >
-              <SkeletonImage src={img.url} alt="" fill sizes="64px" className="object-contain" />
+              <SkeletonImage src={img.url} alt="" fill sizes="64px" className={img.style === "photo" ? "object-cover" : "object-contain"} />
             </button>
           ))}
         </div>

@@ -62,7 +62,7 @@ export default async function Dashboard() {
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
-                    <span className="text-sm tabular-nums text-white/70">{formatPrice(p.price, "ru")}</span>
+                    <span className="text-sm tabular-nums text-white/70">{formatPrice(p.price, "ru", p.currency === "USD" ? "USD" : "UZS")}</span>
                     {p.isHidden ? <Badge tone="muted">скрыт</Badge> : p.inStock ? <Badge tone="ok">в наличии</Badge> : <Badge tone="warn">нет</Badge>}
                   </span>
                 </Link>

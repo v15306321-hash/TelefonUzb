@@ -20,6 +20,23 @@ export const specItemSchema = z.object({
 });
 export type SpecItem = z.infer<typeof specItemSchema>;
 
+export const CURRENCIES = ["UZS", "USD"] as const;
+export type Currency = (typeof CURRENCIES)[number];
+export const asCurrency = (v: unknown): Currency => (v === "USD" ? "USD" : "UZS");
+
+/** Installment terms for one particular unit: down payment + N monthly payments (product currency). */
+export const installmentOfferSchema = z.object({
+  down: z.coerce.number().int().min(0).max(2_000_000_000),
+  months: z.coerce.number().int().min(1).max(60),
+  monthly: z.coerce.number().int().min(1).max(2_000_000_000),
+});
+export type InstallmentOffer = z.infer<typeof installmentOfferSchema>;
+
+export function parseInstallmentOffers(value: unknown): InstallmentOffer[] {
+  const r = z.array(installmentOfferSchema).safeParse(value);
+  return r.success ? r.data : [];
+}
+
 /** { "256 GB": 12500000 } — only positive integer prices for listed options are kept. */
 export function parseStoragePrices(value: unknown, options: string[]): Record<string, number> {
   const out: Record<string, number> = {};

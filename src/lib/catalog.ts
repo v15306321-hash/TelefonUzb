@@ -5,12 +5,30 @@ import { prisma } from "./db";
 import { pick } from "./localize";
 import { buildDoc, searchDocs } from "./search";
 import { assetUrl } from "./storage";
-import { parseColors, parseSpecs, parseStoragePrices, type ColorOption, type SpecItem } from "./types";
+import { asCurrency, parseColors, parseInstallmentOffers, parseSpecs, parseStoragePrices, type ColorOption, type Currency, type InstallmentOffer, type SpecItem } from "./types";
 
 export const CATALOG_TAG = "catalog";
 
-/** `color` = HEX of the product colour the photo shows (null = any colour). */
-export type CatalogImage = { url: string; width: number | null; height: number | null; color: string | null };
+/**
+ * `color` = HEX of the product colour the photo shows (null = any colour).
+ * `style`: "studio" — product on white, shown whole; "photo" — live shot that fills the frame.
+ */
+export type CatalogImage = { url: string; width: number | null; height: number | null; color: string | null; style: "studio" | "photo" };
+
+/** Used-phone details for one particular unit. */
+export type UnitCondition = {
+  used: boolean;
+  batteryHealth: number | null;
+  batteryCycles: number | null;
+  hasBox: boolean | null;
+  region: string;
+  noteRu: string;
+  noteUz: string;
+};
+
+/** Rough UZS value of 1 USD — used only to order a mixed-currency list by price. */
+const USD_SORT_RATE = 12_500;
+export const priceSortKey = (p: { price: number; currency: Currency }) => (p.currency === "USD" ? p.price * USD_SORT_RATE : p.price);
 
 export type CatalogProduct = {
   id: string;
@@ -23,6 +41,10 @@ export type CatalogProduct = {
   price: number;
   /** true when storage options have different prices */
   priceVaries: boolean;
+  currency: Currency;
+  condition: UnitCondition;
+  /** installment terms for this unit (empty → the site-wide calculator is used) */
+  installmentOffers: InstallmentOffer[];
   inStock: boolean;
   isFeatured: boolean;
   sortOrder: number;
@@ -65,6 +87,17 @@ export const getVisibleProducts = unstable_cache(
       descriptionUz: p.descriptionUz,
       price: all.length ? Math.min(...all) : p.price,
       priceVaries: new Set(all).size > 1,
+      currency: asCurrency(p.currency),
+      condition: {
+        used: p.condition === "used",
+        batteryHealth: p.batteryHealth,
+        batteryCycles: p.batteryCycles,
+        hasBox: p.hasBox,
+        region: p.region,
+        noteRu: p.conditionNoteRu,
+        noteUz: p.conditionNoteUz,
+      },
+      installmentOffers: parseInstallmentOffers(p.installmentOffers),
       inStock: p.inStock,
       isFeatured: p.isFeatured,
       sortOrder: p.sortOrder,
@@ -72,14 +105,14 @@ export const getVisibleProducts = unstable_cache(
       storagePrices,
       colors: parseColors(p.colors),
       specs: parseSpecs(p.specs),
-      images: p.images.map((i) => ({ url: assetUrl(i.asset.id)!, width: i.asset.width, height: i.asset.height, color: i.colorKey?.toLowerCase() ?? null })),
+      images: p.images.map((i) => ({ url: assetUrl(i.asset.id)!, width: i.asset.width, height: i.asset.height, color: i.colorKey?.toLowerCase() ?? null, style: i.style === "photo" ? "photo" : "studio" })),
       brand: p.brand,
       category: p.category,
       createdAt: p.createdAt.toISOString(),
       };
     });
   },
-  ["visible-products-v3"],
+  ["visible-products-v4"],
   { tags: [CATALOG_TAG], revalidate: 3600 },
 );
 
@@ -148,10 +181,10 @@ export function queryCatalog(products: CatalogProduct[], q: CatalogQuery): Catal
   const sorted = [...list];
   switch (q.sort) {
     case "price_asc":
-      sorted.sort((a, b) => a.price - b.price);
+      sorted.sort((a, b) => priceSortKey(a) - priceSortKey(b));
       break;
     case "price_desc":
-      sorted.sort((a, b) => b.price - a.price);
+      sorted.sort((a, b) => priceSortKey(b) - priceSortKey(a));
       break;
     case "newest":
       sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -177,6 +210,9 @@ export type ProductCardData = {
   price: number;
   /** show the price as "from …" */
   priceFrom: boolean;
+  currency: Currency;
+  used: boolean;
+  batteryHealth: number | null;
   inStock: boolean;
   image: CatalogImage | null;
   colors: string[];
@@ -190,6 +226,9 @@ export function toCard(p: CatalogProduct, locale: Locale): ProductCardData {
     category: pick(locale, p.category.nameRu, p.category.nameUz),
     price: p.price,
     priceFrom: p.priceVaries,
+    currency: p.currency,
+    used: p.condition.used,
+    batteryHealth: p.condition.batteryHealth,
     inStock: p.inStock,
     image: p.images[0] ?? null,
     colors: p.colors.map((c) => c.hex).slice(0, 5),

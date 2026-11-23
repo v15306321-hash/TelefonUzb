@@ -206,7 +206,12 @@ export async function saveProductAction(raw: unknown): Promise<ActionResult<{ id
   }
   // photo ↔ colour links must point to one of the product's colours
   const colorHexes = new Set(v.colors.map((c) => c.hex.toLowerCase()));
-  const imageRows = v.images.map((img, i) => ({ assetId: img.assetId, sortOrder: i, colorKey: img.color && colorHexes.has(img.color) ? img.color : null }));
+  const imageRows = v.images.map((img, i) => ({
+    assetId: img.assetId,
+    sortOrder: i,
+    colorKey: img.color && colorHexes.has(img.color) ? img.color : null,
+    style: img.style,
+  }));
 
   // only prices for listed storage options, and only those that differ from the base price
   const storagePrices = Object.fromEntries(
@@ -221,6 +226,16 @@ export async function saveProductAction(raw: unknown): Promise<ActionResult<{ id
     descriptionUz: v.descriptionUz,
     price: v.price,
     storagePrices,
+    currency: v.currency,
+    condition: v.condition,
+    // condition details only make sense for used units
+    batteryHealth: v.condition === "used" ? v.batteryHealth : null,
+    batteryCycles: v.condition === "used" ? v.batteryCycles : null,
+    hasBox: v.condition === "used" ? v.hasBox : null,
+    region: v.condition === "used" ? v.region : "",
+    conditionNoteRu: v.condition === "used" ? v.conditionNoteRu : "",
+    conditionNoteUz: v.condition === "used" ? v.conditionNoteUz : "",
+    installmentOffers: v.installmentOffers,
     inStock: v.inStock,
     isHidden: v.isHidden,
     isFeatured: v.isFeatured,
