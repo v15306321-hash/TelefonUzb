@@ -669,6 +669,42 @@ const SPEC_A17 = [
   s("Аккумулятор", "Batareya", "5000 мА·ч", "5000 mA·soat"),
 ];
 
+const SPEC_13 = [
+  s("Экран", "Ekran", '6,1" Super Retina XDR', '6,1" Super Retina XDR'),
+  s("Процессор", "Protsessor", "Apple A15 Bionic"),
+  s("Основная камера", "Asosiy kamera", "12 + 12 Мп", "12 + 12 MP"),
+];
+const SPEC_13_PRO = [
+  s("Экран", "Ekran", '6,1" Super Retina XDR, ProMotion 120 Гц', '6,1" Super Retina XDR, ProMotion 120 Hz'),
+  s("Процессор", "Protsessor", "Apple A15 Bionic"),
+  s("Основная камера", "Asosiy kamera", "12 + 12 + 12 Мп, оптический зум 3×", "12 + 12 + 12 MP, 3x optik zum"),
+];
+const SPEC_13_PRO_MAX = [
+  s("Экран", "Ekran", '6,7" Super Retina XDR, ProMotion 120 Гц', '6,7" Super Retina XDR, ProMotion 120 Hz'),
+  s("Процессор", "Protsessor", "Apple A15 Bionic"),
+  s("Основная камера", "Asosiy kamera", "12 + 12 + 12 Мп, оптический зум 3×", "12 + 12 + 12 MP, 3x optik zum"),
+];
+const SPEC_14_PRO = [
+  s("Экран", "Ekran", '6,1" Super Retina XDR, ProMotion 120 Гц', '6,1" Super Retina XDR, ProMotion 120 Hz'),
+  s("Процессор", "Protsessor", "Apple A16 Bionic"),
+  s("Основная камера", "Asosiy kamera", "48 + 12 + 12 Мп, оптический зум 3×", "48 + 12 + 12 MP, 3x optik zum"),
+];
+const SPEC_15_PRO = [
+  s("Экран", "Ekran", '6,1" Super Retina XDR, ProMotion 120 Гц', '6,1" Super Retina XDR, ProMotion 120 Hz'),
+  s("Процессор", "Protsessor", "Apple A17 Pro"),
+  s("Основная камера", "Asosiy kamera", "48 + 12 + 12 Мп, оптический зум 3×", "48 + 12 + 12 MP, 3x optik zum"),
+];
+const SPEC_17 = [
+  s("Экран", "Ekran", '6,3" Super Retina XDR, ProMotion 120 Гц', '6,3" Super Retina XDR, ProMotion 120 Hz'),
+  s("Процессор", "Protsessor", "Apple A19"),
+  s("Основная камера", "Asosiy kamera", "48 + 48 Мп", "48 + 48 MP"),
+];
+const SPEC_17_PRO = [
+  s("Экран", "Ekran", '6,3" Super Retina XDR, ProMotion 120 Гц', '6,3" Super Retina XDR, ProMotion 120 Hz'),
+  s("Процессор", "Protsessor", "Apple A19 Pro"),
+  s("Основная камера", "Asosiy kamera", "48 + 48 + 48 Мп", "48 + 48 + 48 MP"),
+];
+
 const DEEP_BLUE = c("Глубокий синий", "To‘q ko‘k", "#2d3a56");
 const SILVER = c("Серебристый", "Kumushrang", "#dcdcdf");
 
@@ -840,6 +876,52 @@ export const listings: Seed[] = [
     8,
     false, // sold
   ),
+
+  // ---- from the channel: in stock ----
+  used("iphone-13-128-midnight-380", "apple", "Apple iPhone 13 128 GB", "128 GB", c("Тёмная ночь", "Tun", "#232a33"), 380, SPEC_13,
+    { currency: "USD", batteryHealth: 88, hasBox: true, region: "RM/A", offers: [{ down: 200, months: 3, monthly: 75 }] },
+    ["live-iphone-13-midnight-380", "iphone-13-midnight", "iphone-13-midnight-side", "iphone-13-midnight-camera"], 30),
+  used("iphone-17-256-mist-blue-840", "apple", "Apple iPhone 17 256 GB", "256 GB", c("Туманно-голубой", "Tumanli ko‘k", "#9fb7d6"), 840, SPEC_17,
+    { currency: "USD", batteryHealth: 99, hasBox: true, region: "KH/A", offers: [{ down: 300, months: 3, monthly: 219 }, { down: 300, months: 6, monthly: 129 }] },
+    ["live-iphone-17-mist-blue-840"], 24),
+  used("iphone-13-pro-max-256-green-550", "apple", "Apple iPhone 13 Pro Max 256 GB", "256 GB", c("Альпийский зелёный", "Alp yashil", "#4e5d4e"), 550, SPEC_13_PRO_MAX,
+    { currency: "USD", batteryHealth: 79, hasBox: true, region: "LL/A", offers: [{ down: 250, months: 3, monthly: 120 }, { down: 250, months: 6, monthly: 70 }] },
+    ["live-iphone-13-pro-max-green-550", "iphone-13-pro-alpine-green"], 22),
+  used("iphone-14-pro-128-gold-480", "apple", "Apple iPhone 14 Pro 128 GB", "128 GB", c("Золотой", "Oltin", "#efe1c4"), 480, SPEC_14_PRO,
+    { currency: "USD", batteryHealth: 76, hasBox: true, region: "KH/A", offers: [{ down: 250, months: 3, monthly: 95 }, { down: 250, months: 6, monthly: 55 }] },
+    ["live-iphone-14-pro-gold-480", "iphone-14-pro-gold-camera"], 21),
+  used("iphone-17-pro-max-256-orange-990", "apple", "Apple iPhone 17 Pro Max 256 GB", "256 GB", c("Космический оранжевый", "Kosmik to‘q sariq", "#d9733b"), 990, SPEC_17_PRO_MAX,
+    { currency: "USD", batteryHealth: 90, hasBox: true, region: "X/A", offers: [{ down: 500, months: 3, monthly: 199 }, { down: 500, months: 6, monthly: 115 }] },
+    ["live-iphone-17-pro-max-orange-990", ...studio17("orange")], 6),
+  used("iphone-17-pro-256-orange-1220", "apple", "Apple iPhone 17 Pro 256 GB", "256 GB", c("Космический оранжевый", "Kosmik to‘q sariq", "#d9733b"), 1220, SPEC_17_PRO,
+    { currency: "USD", batteryHealth: 100, batteryCycles: 66, hasBox: true, region: "HX/A", offers: [{ down: 500, months: 3, monthly: 290 }, { down: 500, months: 6, monthly: 169 }] },
+    ["live-iphone-17-pro-orange-1220", ...studio17("orange")], 5),
+
+  // ---- from the channel: sold ("Sotildi") ----
+  used("iphone-13-pro-256-sierra-blue-450", "apple", "Apple iPhone 13 Pro 256 GB", "256 GB", c("Небесно-голубой", "Osmon ko‘k", "#9bb5ce"), 450, SPEC_13_PRO,
+    { currency: "USD", batteryHealth: 72, hasBox: true, region: "LL/A", offers: [{ down: 200, months: 3, monthly: 100 }, { down: 200, months: 6, monthly: 59 }] },
+    ["live-iphone-13-pro-sierra-blue-450", "iphone-13-pro-sierra-blue"], 23, false),
+  used("iphone-15-pro-128-blue-580", "apple", "Apple iPhone 15 Pro 128 GB", "128 GB", c("Синий титан", "Ko‘k titan", "#3f4a5a"), 580, SPEC_15_PRO,
+    { currency: "USD", batteryHealth: 85, hasBox: true, region: "KH/A", offers: [{ down: 250, months: 3, monthly: 133 }, { down: 250, months: 6, monthly: 77 }] },
+    ["live-iphone-15-pro-blue-580", "iphone-15-pro-blue-front", "iphone-15-pro-blue-back"], 20, false),
+  used("iphone-13-pro-max-128-sierra-blue-540", "apple", "Apple iPhone 13 Pro Max 128 GB", "128 GB", c("Небесно-голубой", "Osmon ko‘k", "#9bb5ce"), 540, SPEC_13_PRO_MAX,
+    { currency: "USD", batteryHealth: 83, region: "LL/A", offers: [{ down: 250, months: 3, monthly: 119 }, { down: 250, months: 6, monthly: 69 }] },
+    ["live-iphone-13-pro-max-sierra-blue-540", "iphone-13-pro-sierra-blue"], 17, false),
+  used("iphone-16-pro-max-256-black-980", "apple", "Apple iPhone 16 Pro Max 256 GB", "256 GB", c("Чёрный титан", "Qora titan", "#3c3c3e"), 980, SPEC_16_PRO_MAX,
+    { currency: "USD", batteryHealth: 91, hasBox: true, region: "VC/A (SIM + eSIM)", offers: [{ down: 400, months: 3, monthly: 232 }, { down: 400, months: 6, monthly: 136 }] },
+    ["live-iphone-16-pro-max-black-980", "iphone-16-pro-max-black-front", "iphone-16-pro-max-black-back"], 15, false),
+  used("iphone-18-pro-max-256-black-1690", "apple", "Apple iPhone 18 Pro Max 256 GB", "256 GB", c("Чёрный", "Qora", "#2b2b2d"), 1690, [],
+    { currency: "USD", batteryHealth: 100, batteryCycles: 1, hasBox: true, region: "ZA/A", offers: [{ down: 800, months: 3, monthly: 359 }, { down: 800, months: 6, monthly: 210 }] },
+    ["live-iphone-18-pro-max-1690", "iphone-18-pro-max-black-front", "iphone-18-pro-max-black-side-v2", "iphone-18-pro-max-black-camera"], 14, false),
+  used("iphone-16-pro-max-256-natural-950", "apple", "Apple iPhone 16 Pro Max 256 GB", "256 GB", c("Натуральный титан", "Tabiiy titan", "#bab4a9"), 950, SPEC_16_PRO_MAX,
+    { currency: "USD", batteryHealth: 91, hasBox: true, region: "AH/A", offers: [{ down: 400, months: 3, monthly: 220 }, { down: 400, months: 6, monthly: 129 }] },
+    ["live-iphone-16-pro-max-natural-950", "iphone-16-pro-max-natural-front"], 12, false),
+  used("iphone-17-pro-max-256-silver-1330-za", "apple", "Apple iPhone 17 Pro Max 256 GB", "256 GB", SILVER, 1330, SPEC_17_PRO_MAX,
+    { currency: "USD", batteryHealth: 99, hasBox: true, region: "ZA/A", offers: [{ down: 600, months: 3, monthly: 295 }, { down: 600, months: 6, monthly: 175 }] },
+    ["live-iphone-17-pro-max-silver-1330-za", ...studio17("silver")], 12, false),
+  used("iphone-17-pro-max-256-deep-blue-1280", "apple", "Apple iPhone 17 Pro Max 256 GB", "256 GB", DEEP_BLUE, 1280, SPEC_17_PRO_MAX,
+    { currency: "USD", batteryHealth: 100, batteryCycles: 72, hasBox: true, region: "LL/A (eSIM)", offers: [{ down: 500, months: 3, monthly: 319 }, { down: 500, months: 6, monthly: 188 }] },
+    ["live-iphone-17-pro-max-deep-blue-1280", ...studio17("deep-blue")], 9, false),
 ];
 
 /* ------------------------------------------------------------------------------------------ */
