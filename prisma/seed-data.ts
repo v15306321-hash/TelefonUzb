@@ -708,6 +708,18 @@ const studio17 = (color: string) => ["front", "back", "camera"].map((a) => `ipho
 
 export const listings: Seed[] = [
   used(
+    "iphone-16-pro-max-256-desert-940",
+    "apple",
+    "Apple iPhone 16 Pro Max 256 GB",
+    "256 GB",
+    c("Пустынный титан", "Sahro titani", "#c8b09a"),
+    940,
+    SPEC_16_PRO_MAX,
+    { currency: "USD", batteryHealth: 93, hasBox: true, region: "X/A", offers: [{ down: 400, months: 3, monthly: 219 }, { down: 400, months: 6, monthly: 129 }] },
+    ["live-iphone-16-pro-max-desert-940", "iphone-16-pro-desert-front", "iphone-16-pro-desert-back"],
+    0,
+  ),
+  used(
     "iphone-17-pro-max-256-deep-blue-1190",
     "apple",
     "Apple iPhone 17 Pro Max 256 GB",

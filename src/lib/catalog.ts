@@ -112,7 +112,7 @@ export const getVisibleProducts = unstable_cache(
       };
     });
   },
-  ["visible-products-v8"],
+  ["visible-products-v9"],
   { tags: [CATALOG_TAG], revalidate: 3600 },
 );
 
