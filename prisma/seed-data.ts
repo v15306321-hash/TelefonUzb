@@ -824,7 +824,7 @@ export const listings: Seed[] = [
     1_950_000,
     SPEC_A17,
     { currency: "UZS", hasBox: true, region: "Вьетнам", noteRu: "Хорошее", noteUz: "Yaxshi" },
-    ["live-galaxy-a17-black"],
+    ["live-galaxy-a17-black", "galaxy-a17-black-front", "galaxy-a17-black-back", "galaxy-a17-black-side"],
     8,
     false, // sold
   ),
