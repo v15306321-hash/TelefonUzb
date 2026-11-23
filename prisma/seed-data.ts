@@ -294,6 +294,7 @@ export const products: Seed[] = [
       s("Вес", "Og‘irligi", "165 г", "165 g"),
     ],
     daysAgo: 4,
+    photos: poses(["black"], "iphone-air", ["front", "back", "camera"], 3),
     hidden: true,
   },
   {
@@ -338,6 +339,7 @@ export const products: Seed[] = [
       s("Вес", "Og‘irligi", "170 г", "170 g"),
     ],
     daysAgo: 60,
+    photos: [{ file: "iphone-16-black-back", color: 3 }],
     hidden: true,
   },
   {
@@ -754,7 +756,7 @@ export const listings: Seed[] = [
     890,
     SPEC_16_PRO_MAX,
     { currency: "USD", batteryHealth: 89, hasBox: true, region: "VC/A", offers: [{ down: 400, months: 3, monthly: 199 }, { down: 400, months: 6, monthly: 115 }] },
-    ["live-iphone-16-pro-max-black-890"],
+    ["live-iphone-16-pro-max-black-890", "iphone-16-pro-max-black-front", "iphone-16-pro-max-black-back"],
     3,
   ),
   used(
@@ -766,7 +768,7 @@ export const listings: Seed[] = [
     780,
     SPEC_16_PRO,
     { currency: "USD", batteryHealth: 89, hasBox: true, region: "X/A", offers: [{ down: 350, months: 3, monthly: 175 }, { down: 350, months: 6, monthly: 101 }] },
-    ["live-iphone-16-pro-desert-780"],
+    ["live-iphone-16-pro-desert-780", "iphone-16-pro-desert-front", "iphone-16-pro-desert-back"],
     4,
   ),
   used(
@@ -778,7 +780,7 @@ export const listings: Seed[] = [
     680,
     SPEC_16,
     { currency: "USD", batteryHealth: 92, hasBox: true, region: "ZD/A", offers: [{ down: 300, months: 3, monthly: 155 }, { down: 300, months: 6, monthly: 89 }] },
-    ["live-iphone-16-black-680"],
+    ["live-iphone-16-black-680", "iphone-16-black-back"],
     5,
   ),
   used(
