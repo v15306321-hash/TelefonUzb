@@ -81,6 +81,21 @@ function poses(colorNames: string[], prefix: string, angles: string[], firstColo
   return colorNames.flatMap((name, i) => angles.map((a) => ({ file: `${prefix}-${name}-${a}`, color: firstColor + i })));
 }
 
+/** Earlier studio shots that turned out to show another model (iPhone 18 Pro Max), replaced by correct 17 Pro Max photos. */
+const WRONG_17_PRO_MAX = [
+  "iphone-17-pro-blue",
+  "iphone-17-pro-blue-side",
+  "iphone-17-pro-blue-camera",
+  "iphone-17-pro-black-front",
+  "iphone-17-pro-black-side",
+  "iphone-17-pro-black-side-v2",
+  "iphone-17-pro-black-camera",
+  "iphone-17-pro-burgundy-front",
+  "iphone-17-pro-burgundy-side",
+  "iphone-17-pro-burgundy-camera",
+  "iphone-17-pro-white-side",
+  "iphone-17-pro-white-camera",
+];
 /** Models with real product photos (shown first in the catalog). */
 const photoProducts: Seed[] = [
   {
@@ -212,8 +227,11 @@ export const products: Seed[] = [
     price: 19_400_000,
     isFeatured: true,
     storage: ["256 GB", "512 GB", "1 TB", "2 TB"],
-    colors: [c("Небесно-голубой", "Osmon ko‘k", "#a9bfd8"), c("Чёрный", "Qora", "#2b2b2d"), c("Бордовый", "Bordo", "#6b2a35"), c("Белый", "Oq", "#e9e9eb")],
-    previousColors: [[c("Космический оранжевый", "Kosmik to‘q sariq", "#d9733b"), c("Глубокий синий", "To‘q ko‘k", "#2d3a56"), c("Серебристый", "Kumushrang", "#dcdcdf")]],
+    colors: [c("Серебристый", "Kumushrang", "#dcdcdf"), c("Глубокий синий", "To‘q ko‘k", "#2d3a56"), c("Космический оранжевый", "Kosmik to‘q sariq", "#d9733b")],
+    previousColors: [
+      [c("Небесно-голубой", "Osmon ko‘k", "#a9bfd8"), c("Чёрный", "Qora", "#2b2b2d"), c("Бордовый", "Bordo", "#6b2a35"), c("Белый", "Oq", "#e9e9eb")],
+      [c("Космический оранжевый", "Kosmik to‘q sariq", "#d9733b"), c("Глубокий синий", "To‘q ko‘k", "#2d3a56"), c("Серебристый", "Kumushrang", "#dcdcdf")],
+    ],
     specs: [
       s("Экран", "Ekran", '6,9" Super Retina XDR, ProMotion 120 Гц', '6,9" Super Retina XDR, ProMotion 120 Hz'),
       s("Процессор", "Protsessor", "Apple A19 Pro"),
@@ -226,13 +244,11 @@ export const products: Seed[] = [
     ],
     daysAgo: 2,
     photos: [
-      { file: "iphone-17-pro-blue", color: 0 },
-      ...poses(["blue"], "iphone-17-pro", ["side", "camera"], 0),
-      ...poses(["black"], "iphone-17-pro", ["front", "side-v2", "camera"], 1),
-      ...poses(["burgundy"], "iphone-17-pro", ["front", "side", "camera"], 2),
-      ...poses(["white"], "iphone-17-pro", ["side", "camera"], 3),
+      ...poses(["silver"], "iphone-17-pro-max", ["front", "back", "camera"], 0),
+      ...poses(["deep-blue"], "iphone-17-pro-max", ["front", "back", "camera"], 1),
+      ...poses(["orange"], "iphone-17-pro-max", ["front", "back", "camera"], 2),
     ],
-    retiredPhotos: ["iphone-17-pro-black-side"],
+    retiredPhotos: WRONG_17_PRO_MAX,
   },
   {
     slug: "apple-iphone-17-pro",
@@ -666,6 +682,7 @@ const used = (
   photos: string[],
   daysAgo: number,
   inStock = true,
+  retiredPhotos: string[] = [],
 ): Seed => ({
   slug,
   brand,
@@ -681,8 +698,11 @@ const used = (
   specs,
   daysAgo,
   photos: photos.map((file) => ({ file, color: 0 })),
+  retiredPhotos,
   used: u,
 });
+
+const studio17 = (color: string) => ["front", "back", "camera"].map((a) => `iphone-17-pro-max-${color}-${a}`);
 
 export const listings: Seed[] = [
   used(
@@ -694,7 +714,7 @@ export const listings: Seed[] = [
     1190,
     SPEC_17_PRO_MAX,
     { currency: "USD", batteryHealth: 97, hasBox: true, region: "AF/A (SIM + eSIM)", offers: [{ down: 600, months: 3, monthly: 236 }, { down: 600, months: 6, monthly: 138 }] },
-    ["live-iphone-17-pro-max-deep-blue-1190"],
+    ["live-iphone-17-pro-max-deep-blue-1190", ...studio17("deep-blue")],
     0,
   ),
   used(
@@ -706,8 +726,10 @@ export const listings: Seed[] = [
     1330,
     SPEC_17_PRO_MAX,
     { currency: "USD", batteryHealth: 99, batteryCycles: 125, hasBox: true, region: "AF/A", offers: [{ down: 600, months: 3, monthly: 295 }, { down: 600, months: 6, monthly: 175 }] },
-    ["live-iphone-17-pro-max-silver-1330", "iphone-17-pro-white-side", "iphone-17-pro-white-camera"],
+    ["live-iphone-17-pro-max-silver-1330", ...studio17("silver")],
     1,
+    true,
+    WRONG_17_PRO_MAX,
   ),
   used(
     "iphone-17-pro-max-256-silver-1290",
@@ -718,8 +740,10 @@ export const listings: Seed[] = [
     1290,
     SPEC_17_PRO_MAX,
     { currency: "USD", batteryHealth: 96, hasBox: true, region: "ZA/A", offers: [{ down: 550, months: 3, monthly: 299 }, { down: 250, months: 6, monthly: 175 }] },
-    ["live-iphone-17-pro-max-silver-1290", "iphone-17-pro-white-side", "iphone-17-pro-white-camera"],
+    ["live-iphone-17-pro-max-silver-1290", ...studio17("silver")],
     2,
+    true,
+    WRONG_17_PRO_MAX,
   ),
   used(
     "iphone-16-pro-max-256-black-890",
