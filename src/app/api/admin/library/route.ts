@@ -20,7 +20,7 @@ export async function GET(req: Request) {
     select: {
       assetId: true,
       colorKey: true,
-      asset: { select: { filename: true } },
+      asset: { select: { filename: true, size: true } },
       product: { select: { nameRu: true, colors: true } },
     },
   });
@@ -28,8 +28,11 @@ export async function GET(req: Request) {
   const seen = new Set<string>();
   const items: { id: string; url: string; model: string; color: string | null }[] = [];
   for (const r of rows) {
-    if (seen.has(r.assetId)) continue;
+    // the same seed photo may be stored once per product: show each picture once
+    const key = `${r.asset.filename}:${r.asset.size}`;
+    if (seen.has(r.assetId) || seen.has(key)) continue;
     seen.add(r.assetId);
+    seen.add(key);
     const color = r.colorKey ? (parseColors(r.product.colors).find((c) => c.hex.toLowerCase() === r.colorKey?.toLowerCase())?.nameRu ?? null) : null;
     // drop the storage size from unit names: "Apple iPhone 17 Pro Max 256 GB" → "Apple iPhone 17 Pro Max"
     const model = r.product.nameRu.replace(/\s+\d+(\/\d+)?\s*(GB|TB)$/i, "");
