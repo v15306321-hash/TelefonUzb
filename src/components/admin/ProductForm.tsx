@@ -9,6 +9,7 @@ import { normalize } from "@/lib/search";
 import type { ColorOption, SpecItem } from "@/lib/types";
 import { Badge, Button, Card, Field, Input, Notice, Select, Textarea, Toggle } from "./ui";
 import { uploadFile } from "./upload";
+import PhotoLibrary from "./PhotoLibrary";
 
 export type ProductFormValue = {
   id?: string;
@@ -77,6 +78,7 @@ export default function ProductForm({
   const [uploading, setUploading] = useState<string | null>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const [uploadColor, setUploadColor] = useState<string>(""); // colour assigned to newly uploaded photos
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   const set = <K extends keyof ProductFormValue>(key: K, value: ProductFormValue[K]) => setV((s) => ({ ...s, [key]: value }));
   const err = (k: string) => fieldErrors[k];
@@ -480,12 +482,27 @@ export default function ProductForm({
                     ))}
                   </Select>
                 )}
+                <Button size="sm" type="button" disabled={busy} onClick={() => setLibraryOpen(true)}>
+                  Из библиотеки
+                </Button>
                 <Button size="sm" variant="light" type="button" disabled={busy} onClick={() => imageInput.current?.click()}>
                   Загрузить фото
                 </Button>
               </div>
             }
           >
+            <PhotoLibrary
+              open={libraryOpen}
+              onClose={() => setLibraryOpen(false)}
+              initialQuery={v.nameRu.replace(/^Apple\s+/i, "").replace(/\s+\d+(\/\d+)?\s*(GB|TB)$/i, "")}
+              taken={new Set(v.images.map((i) => i.id))}
+              onPick={(items) =>
+                setV((s) => ({
+                  ...s,
+                  images: [...s.images, ...items.filter((it) => !s.images.some((x) => x.id === it.id)).map((it) => ({ id: it.id, url: it.url, color: uploadColor || null, style: "studio" as const }))],
+                }))
+              }
+            />
             <input ref={imageInput} type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple hidden onChange={(e) => onImages(e.target.files)} />
             {v.images.length ? (
               <>

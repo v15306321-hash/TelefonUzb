@@ -8,7 +8,7 @@ import path from "node:path";
 import { createPrisma } from "../src/lib/prisma-factory";
 import bcrypt from "bcryptjs";
 import sharp from "sharp";
-import { brands, categories, listings, products } from "./seed-data";
+import { brands, categories, listings, photoTemplates, products } from "./seed-data";
 import { defaultSiteContent } from "../src/lib/types";
 
 const prisma = createPrisma();
@@ -48,7 +48,11 @@ async function main() {
 
   // --- products (used listings first: they are what the store sells now) ---
   let created = 0;
-  const all = [...listings.map((p, i) => ({ p, order: -1000 + i * 10 })), ...products.map((p, i) => ({ p, order: i * 10 }))];
+  const all = [
+    ...listings.map((p, i) => ({ p, order: -1000 + i * 10 })),
+    ...products.map((p, i) => ({ p, order: i * 10 })),
+    ...photoTemplates.map((p, i) => ({ p, order: 5000 + i * 10 })),
+  ];
   for (const { p, order } of all) {
     let product = await prisma.product.findUnique({ where: { slug: p.slug }, include: { images: true } });
     if (!product) {

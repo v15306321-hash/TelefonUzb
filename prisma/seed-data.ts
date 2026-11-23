@@ -792,7 +792,7 @@ export const listings: Seed[] = [
     530,
     SPEC_14_PRO_MAX,
     { currency: "USD", batteryHealth: 77, hasBox: true, region: "ZP/A", offers: [{ down: 250, months: 3, monthly: 115 }, { down: 250, months: 6, monthly: 66 }] },
-    ["live-iphone-14-pro-max-purple-530", "iphone-14-pro-purple-side", "iphone-14-pro-purple-camera"],
+    ["live-iphone-14-pro-max-purple-530", "iphone-14-pro-max-purple-front", "iphone-14-pro-purple-side", "iphone-14-pro-purple-camera"],
     6,
   ),
   used(
@@ -828,4 +828,61 @@ export const listings: Seed[] = [
     8,
     false, // sold
   ),
+];
+
+/* ------------------------------------------------------------------------------------------ */
+/*
+ * Photo templates: hidden models that keep white-background photos of models not on sale right now.
+ * In the admin, "Из библиотеки" picks these photos for a new used unit of the same model and colour.
+ * Price 0 = not for sale; set a price before publishing.
+ */
+export const photoTemplates: Seed[] = [
+  {
+    slug: "apple-iphone-14",
+    brand: "apple",
+    category: "smartfony",
+    nameRu: "Apple iPhone 14",
+    descriptionRu: "",
+    descriptionUz: "",
+    price: 0,
+    storage: ["128 GB", "256 GB", "512 GB"],
+    colors: [c("Жёлтый", "Sariq", "#f9e479"), c("Фиолетовый", "Binafsha", "#e5ddea"), c("Тёмная ночь", "Tun", "#2e3642"), c("Сияющая звезда", "Yulduz nuri", "#f0ebe3")],
+    specs: [
+      s("Экран", "Ekran", '6,1" Super Retina XDR'),
+      s("Процессор", "Protsessor", "Apple A15 Bionic"),
+      s("Основная камера", "Asosiy kamera", "12 + 12 Мп", "12 + 12 MP"),
+    ],
+    daysAgo: 400,
+    photos: [
+      { file: "iphone-14-yellow-front", color: 0 },
+      { file: "iphone-14-purple-front", color: 1 },
+      { file: "iphone-14-midnight-front", color: 2 },
+      { file: "iphone-14-starlight-front", color: 3 },
+    ],
+    hidden: true,
+  },
+  {
+    slug: "apple-iphone-15-pro",
+    brand: "apple",
+    category: "smartfony",
+    nameRu: "Apple iPhone 15 Pro",
+    descriptionRu: "",
+    descriptionUz: "",
+    price: 0,
+    storage: ["128 GB", "256 GB", "512 GB", "1 TB"],
+    colors: [c("Белый титан", "Oq titan", "#f2f1ed"), c("Чёрный титан", "Qora titan", "#3b3b3d"), c("Натуральный титан", "Tabiiy titan", "#bab4a9"), c("Синий титан", "Ko‘k titan", "#3f4a5a")],
+    specs: [
+      s("Экран", "Ekran", '6,1" Super Retina XDR, ProMotion 120 Гц', '6,1" Super Retina XDR, ProMotion 120 Hz'),
+      s("Процессор", "Protsessor", "Apple A17 Pro"),
+      s("Основная камера", "Asosiy kamera", "48 + 12 + 12 Мп, оптический зум 3×", "48 + 12 + 12 MP, 3x optik zum"),
+    ],
+    daysAgo: 300,
+    photos: [
+      ...poses(["white"], "iphone-15-pro", ["front", "back"], 0),
+      ...poses(["black"], "iphone-15-pro", ["front", "back"], 1),
+      ...poses(["natural"], "iphone-15-pro", ["front", "back"], 2),
+      ...poses(["blue"], "iphone-15-pro", ["front", "back"], 3),
+    ],
+    hidden: true,
+  },
 ];
