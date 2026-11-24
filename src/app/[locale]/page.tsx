@@ -50,7 +50,7 @@ export default async function HomePage({ params }: Params) {
   return (
     <div className="page-enter">
       {/* ---------------- HERO ---------------- */}
-      <section className="relative isolate flex w-full flex-col overflow-hidden wide:h-[100svh] wide:min-h-[600px]" aria-label={dict.hero.videoLabel}>
+      <section className="relative isolate z-10 flex w-full flex-col wide:h-[100svh] wide:min-h-[600px]" aria-label={dict.hero.videoLabel}>
         {/* phones / portrait tablets: the whole storefront in a 4:3 frame under the header, the
             headline laid over its lower part and a blurred glow of the same picture behind the rest;
             wide screens: full-bleed background */}
@@ -78,7 +78,7 @@ export default async function HomePage({ params }: Params) {
         {/* soft scrim behind the headline for legibility over the bright shop window */}
         <div className="pointer-events-none absolute inset-0 hidden bg-[radial-gradient(ellipse_55%_40%_at_50%_66%,rgba(0,0,0,0.5),transparent_72%)] wide:block" />
 
-        <div className="container-x relative z-10 -mt-[30vw] flex flex-col items-center pb-14 text-center wide:mt-auto! wide:pb-[max(4.5rem,11svh)]">
+        <div className="container-x relative z-20 -mt-[30vw] flex flex-col items-center pb-14 text-center wide:mt-auto! wide:pb-[max(4.5rem,11svh)]">
           <p className="eyebrow mb-4 !text-white/80 [text-shadow:0_1px_12px_rgba(0,0,0,0.9)] animate-fade-up">{dict.hero.eyebrow}</p>
           <h1 className="headline max-w-4xl text-balance text-[2.2rem] text-white [text-shadow:0_2px_24px_rgba(0,0,0,0.7)] animate-fade-up [animation-delay:80ms] sm:text-6xl lg:text-7xl">
             {pick(locale, content.heroTitleRu, content.heroTitleUz)}
@@ -86,7 +86,7 @@ export default async function HomePage({ params }: Params) {
           <p className="mt-4 max-w-xl text-balance text-[0.98rem] text-white/75 [text-shadow:0_1px_16px_rgba(0,0,0,0.6)] animate-fade-up [animation-delay:160ms] sm:mt-5 sm:text-lg">
             {pick(locale, content.heroSubtitleRu, content.heroSubtitleUz)}
           </p>
-          <div className="mt-8 flex w-full justify-center animate-fade-up [animation-delay:240ms] sm:mt-10">
+          <div className="relative z-30 mt-8 flex w-full justify-center animate-fade-up [animation-delay:240ms] sm:mt-10">
             <SearchBox locale={locale} labels={dict.search} />
           </div>
           <p className="mt-4 text-xs text-white/40 animate-fade-up [animation-delay:320ms]">{dict.search.hints}</p>
